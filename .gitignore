@@ -85,10 +85,7 @@ htmlcov/
 # Python Packaging
 ############################
 dist/
-<<<<<<< HEAD
 build/
-=======
->>>>>>> f94c57c59b9eb201b573461896844a5e042463b9
 *.egg-info/
 .eggs/
 pip-wheel-metadata/
