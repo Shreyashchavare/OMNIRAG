@@ -1,0 +1,236 @@
+name: omragul-dev
+
+services:
+
+  # ==========================================================
+  # FRONTEND
+  # ==========================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: omragul-frontend
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+    depends_on:
+      - gateway-service
+    networks:
+      - omragul-network
+
+
+  # ==========================================================
+  # JAVA MICROSERVICES
+  # ==========================================================
+  gateway-service:
+    build:
+      context: ./backend/gateway-service
+      dockerfile: Dockerfile
+    container_name: gateway-service
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    depends_on:
+      - identity-service
+    networks:
+      - omragul-network
+
+  identity-service:
+    build:
+      context: ./backend/identity-service
+      dockerfile: Dockerfile
+    container_name: identity-service
+    ports:
+      - "8081:8080"
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - omragul-network
+
+  knowledge-service:
+    build:
+      context: ./backend/knowledge-service
+      dockerfile: Dockerfile
+    container_name: knowledge-service
+    ports:
+      - "8082:8080"
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    networks:
+      - omragul-network
+
+  processing-service:
+    build:
+      context: ./backend/processing-service
+      dockerfile: Dockerfile
+    container_name: processing-service
+    ports:
+      - "8083:8080"
+    restart: unless-stopped
+    depends_on:
+      - embedding-service
+      - rag-service
+      - multimodal-service
+      - agent-service
+    networks:
+      - omragul-network
+
+  analytics-service:
+    build:
+      context: ./backend/analytics-service
+      dockerfile: Dockerfile
+    container_name: analytics-service
+    ports:
+      - "8084:8080"
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    networks:
+      - omragul-network
+
+  notification-service:
+    build:
+      context: ./backend/notification-service
+      dockerfile: Dockerfile
+    container_name: notification-service
+    ports:
+      - "8085:8080"
+    restart: unless-stopped
+    networks:
+      - omragul-network
+
+
+  # ==========================================================
+  # PYTHON AI SERVICES
+  # ==========================================================
+  embedding-service:
+    build:
+      context: ./ai-services/embedding-service
+    container_name: embedding-service
+    ports:
+      - "8001:8000"
+    restart: unless-stopped
+    networks:
+      - omragul-network
+
+  rag-service:
+    build:
+      context: ./ai-services/rag-service
+    container_name: rag-service
+    ports:
+      - "8002:8000"
+    restart: unless-stopped
+    depends_on:
+      - ollama
+    networks:
+      - omragul-network
+
+  multimodal-service:
+    build:
+      context: ./ai-services/multimodal-service
+    container_name: multimodal-service
+    ports:
+      - "8003:8000"
+    restart: unless-stopped
+    depends_on:
+      - ollama
+    networks:
+      - omragul-network
+
+  agent-service:
+    build:
+      context: ./ai-services/agent-service
+    container_name: agent-service
+    ports:
+      - "8004:8000"
+    restart: unless-stopped
+    depends_on:
+      - ollama
+    networks:
+      - omragul-network
+
+
+  # ==========================================================
+  # DATABASES
+  # ==========================================================
+  postgres:
+    image: postgres:17
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: omragul
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - omragul-network
+
+  redis:
+    image: redis:8-alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - omragul-network
+
+
+  # ==========================================================
+  # PGADMIN
+  # ==========================================================
+  pgadmin:
+    image: dpage/pgadmin4:9
+    container_name: pgadmin
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@omragul.ai
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    networks:
+      - omragul-network
+
+
+  # ==========================================================
+  # OLLAMA
+  # ==========================================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - omragul-network
+
+
+# ==========================================================
+# NETWORK
+# ==========================================================
+networks:
+  omragul-network:
+    driver: bridge
+
+
+# ==========================================================
+# VOLUMES
+# ==========================================================
+volumes:
+  postgres-data:
+  redis-data:
+  pgadmin-data:
+  ollama-data:
