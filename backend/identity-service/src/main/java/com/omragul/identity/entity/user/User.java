@@ -1,5 +1,6 @@
 package com.omragul.identity.entity.user;
 
+import com.omragul.identity.entity.audit.LoginHistory;
 import com.omragul.identity.entity.audit.UserSession;
 import com.omragul.identity.entity.auth.Otp;
 import com.omragul.identity.entity.auth.PasswordHistory;
@@ -7,7 +8,6 @@ import com.omragul.identity.entity.auth.RefreshToken;
 import com.omragul.identity.entity.common.AuditableEntity;
 import com.omragul.identity.entity.rbac.UserPermission;
 import com.omragul.identity.entity.rbac.UserRole;
-import com.omragul.identity.enums.LoginStatus;
 import com.omragul.identity.enums.UserStatus;
 import jakarta.persistence.*;
 import lombok.*;
@@ -132,5 +132,5 @@ public class User extends AuditableEntity {
     )
     @Builder.Default
     @ToString.Exclude
-    private Set<LoginStatus> loginHistory = new HashSet<>();
+    private Set<LoginHistory> loginHistory = new HashSet<>();
 }
