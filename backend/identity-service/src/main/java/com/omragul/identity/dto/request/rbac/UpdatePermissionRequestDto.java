@@ -18,9 +18,4 @@ public class UpdatePermissionRequestDto {
     @Size(max = 500, message = "Description must not exceed 500 characters")
     private String description;
 
-    @Size(max = 100, message = "Resource type must not exceed 100 characters")
-    private String resourceType;
-
-    @Size(max = 50, message = "Action must not exceed 50 characters")
-    private String action;
 }

@@ -16,8 +16,4 @@ public class PermissionResponseDto {
     private String permissionName;
 
     private String description;
-
-    private String resourceType;
-
-    private String action;
 }
