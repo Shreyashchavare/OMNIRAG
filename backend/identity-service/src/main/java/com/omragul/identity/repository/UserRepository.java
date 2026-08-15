@@ -27,6 +27,9 @@ public interface UserRepository extends CrudRepository<User, UUID> {
 
     Optional<User> findByUserIdAndIsDeletedFalse(UUID userId);
 
+    // Inactive user lookup
+    Optional<User> findByUserIdAndIsDeletedTrue(UUID userId);
+
     // Active user existence checks
     boolean existsByUsernameAndIsDeletedFalse(String username);
 
