@@ -30,8 +30,8 @@ public class RefreshToken {
     )
     private User user;
 
-    @Column(name = "token", nullable = false, unique = true, length = 512)
-    private String token;
+    @Column(name = "token_hash", nullable = false, unique = true, length = 255)
+    private String tokenHash;
 
     @CreationTimestamp
     @Column(name = "issued_at", nullable = false, updatable = false)

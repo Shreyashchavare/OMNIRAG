@@ -12,14 +12,18 @@ import java.util.UUID;
 @Repository
 public interface RefreshTokenRepository extends CrudRepository<RefreshToken, UUID> {
 
-    Optional<RefreshToken> findByToken(String token);
+    Optional<RefreshToken> findByTokenHash(String tokenHash);
 
     List<RefreshToken> findByUserUserId(UUID userId);
 
-    Optional<RefreshToken> findByTokenAndRevokedFalse(String token);
+    Optional<RefreshToken> findByTokenHashAndRevokedFalse(
+            String tokenHash
+    );
 
-    Optional<RefreshToken> findByTokenAndRevokedFalseAndExpiresAtAfter(
-            String token,
+    Optional<RefreshToken> findByTokenHashAndRevokedFalseAndExpiresAtAfter(
+            String tokenHash,
             Instant currentTime
     );
 }
+
+

@@ -20,6 +20,9 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
-  identity:
-    otp:
-      expiration-minutes: 5
+identity:
+  otp:
+    expiration-minutes: 5
+
+  refresh-token:
+    expiration-days: 30
