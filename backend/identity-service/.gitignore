@@ -4,6 +4,8 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+src/main/resources/certs/private_key.pem
+
 ### STS ###
 .apt_generated
 .classpath
