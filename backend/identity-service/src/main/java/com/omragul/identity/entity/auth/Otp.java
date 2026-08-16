@@ -31,8 +31,8 @@ public class Otp {
     )
     private User user;
 
-    @Column(name = "otp_code", nullable = false, length = 10)
-    private String otpCode;
+    @Column(name = "otp_code_hash", nullable = false, length = 255)
+    private String otpCodeHash;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "purpose", nullable = false, length = 50)
