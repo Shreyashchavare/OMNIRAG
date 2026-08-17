@@ -1,12 +1,17 @@
 package com.omragul.identity.service.user;
 
+import com.omragul.identity.dto.request.user.SignupProfileRequestDto;
 import com.omragul.identity.dto.request.user.UpdateUserRequestDto;
 import com.omragul.identity.dto.response.user.UserResponseDto;
 import com.omragul.identity.entity.user.User;
+import com.omragul.identity.entity.user.UserProfile;
+import com.omragul.identity.enums.UserStatus;
 import com.omragul.identity.exception.ResourceNotFoundException;
 import com.omragul.identity.mapper.UserMapper;
+import com.omragul.identity.mapper.UserProfileMapper;
 import com.omragul.identity.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +24,39 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final UserMapper userMapper;
+    private final UserProfileMapper userProfileMapper;
+
+    @Value("${identity.security.max-failed-login-attempts}")
+    private int maxFailedLoginAttempts;
+
+    @Override
+    @Transactional
+    public User createUser(
+            String username,
+            String email,
+            String passwordHash,
+            SignupProfileRequestDto profile
+    ) {
+
+        User user = User.builder()
+                .username(username)
+                .email(email)
+                .passwordHash(passwordHash)
+                .status(UserStatus.ACTIVE)
+                .emailVerified(false)
+                .accountLocked(false)
+                .failedLoginAttempts(0)
+                .build();
+
+        UserProfile userProfile =
+                userProfileMapper.toEntity(profile);
+
+        userProfile.setUser(user);
+
+        user.setUserProfile(userProfile);
+
+        return userRepository.save(user);
+    }
 
     @Override
     public UserResponseDto getUserById(UUID userId) {
@@ -63,6 +101,32 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public User getUserEntityByUsername(String username) {
+
+        return userRepository
+                .findByUsernameAndIsDeletedFalse(username)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "User not found with username: " + username
+                        )
+                );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public User getUserEntityByEmail(String email) {
+
+        return userRepository
+                .findByEmailAndIsDeletedFalse(email)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "User not found with email: " + email
+                        )
+                );
+    }
+
+    @Override
     @Transactional
     public UserResponseDto updateUser(
             UUID userId,
@@ -81,6 +145,64 @@ public class UserServiceImpl implements UserService {
         User updatedUser = userRepository.save(user);
 
         return userMapper.toResponseDto(updatedUser);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean existsByUsername(String username) {
+
+        return userRepository
+                .existsByUsernameAndIsDeletedFalse(username);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean existsByEmail(String email) {
+
+        return userRepository
+                .existsByEmailAndIsDeletedFalse(email);
+    }
+
+    @Override
+    @Transactional
+    public void recordFailedLoginAttempt(UUID userId) {
+
+        User user = userRepository
+                .findByUserIdAndIsDeletedFalse(userId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "User not found with id: " + userId
+                        )
+                );
+
+        int failedAttempts = user.getFailedLoginAttempts() + 1;
+
+        user.setFailedLoginAttempts(failedAttempts);
+
+        if (failedAttempts >= maxFailedLoginAttempts) {
+            user.setAccountLocked(true);
+            user.setStatus(UserStatus.LOCKED);
+        }
+
+        userRepository.save(user);
+    }
+
+    @Override
+    @Transactional
+    public void recordSuccessfulLogin(UUID userId) {
+
+        User user = userRepository
+                .findByUserIdAndIsDeletedFalse(userId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "User not found with id: " + userId
+                        )
+                );
+
+        user.setFailedLoginAttempts(0);
+        user.setLastLoginAt(Instant.now());
+
+        userRepository.save(user);
     }
 
     @Override

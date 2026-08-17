@@ -32,3 +32,6 @@ identity:
     public-key: classpath:certs/public_key.pem
     expiration-minutes: 15
     issuer: http://localhost:8080
+
+  security:
+    max-failed-login-attempts: 5
