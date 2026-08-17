@@ -43,9 +43,9 @@ public interface UserService {
 
     boolean existsByEmail(String email);
 
-    void recordFailedLoginAttempt(UUID userId);
-
-    void recordSuccessfulLogin(UUID userId);
+//    void recordFailedLoginAttempt(UUID userId);
+//
+//    void recordSuccessfulLogin(UUID userId);
 
     void deleteUser(UUID userId);
 

@@ -11,6 +11,8 @@ import com.omragul.identity.entity.rbac.UserRole;
 import com.omragul.identity.enums.UserStatus;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.HashSet;
@@ -41,6 +43,7 @@ public class User extends AuditableEntity {
     private String passwordHash;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "status", nullable = false)
     private UserStatus status;
 

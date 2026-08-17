@@ -4,6 +4,8 @@ import com.omragul.identity.entity.common.BaseEntity;
 import com.omragul.identity.enums.Gender;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDate;
 import java.util.UUID;
@@ -45,6 +47,7 @@ public class UserProfile extends BaseEntity {
     private UUID departmentId;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "gender", length = 30)
     private Gender gender;
 

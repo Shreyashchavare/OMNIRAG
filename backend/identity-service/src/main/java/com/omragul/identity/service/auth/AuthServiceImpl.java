@@ -12,6 +12,7 @@ import com.omragul.identity.exception.UserAlreadyExistsException;
 import com.omragul.identity.exception.UserLockedException;
 import com.omragul.identity.mapper.UserMapper;
 import com.omragul.identity.service.security.JwtService;
+import com.omragul.identity.service.security.LoginAttemptService;
 import com.omragul.identity.service.security.PasswordService;
 import com.omragul.identity.service.security.RefreshTokenService;
 import com.omragul.identity.service.user.UserService;
@@ -29,6 +30,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserMapper userMapper;
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
+    private final LoginAttemptService loginAttemptService;
 
     @Value("${identity.jwt.expiration-minutes}")
     private long jwtExpirationMinutes;
@@ -118,7 +120,7 @@ public class AuthServiceImpl implements AuthService {
 
         if (!passwordMatches) {
 
-            userService.recordFailedLoginAttempt(
+            loginAttemptService.recordFailedLoginAttempt(
                     user.getUserId()
             );
 
@@ -127,9 +129,10 @@ public class AuthServiceImpl implements AuthService {
             );
         }
 
-        userService.recordSuccessfulLogin(
+        loginAttemptService.recordSuccessfulLogin(
                 user.getUserId()
         );
+
 
         // 5. Generate access token
         String accessToken =

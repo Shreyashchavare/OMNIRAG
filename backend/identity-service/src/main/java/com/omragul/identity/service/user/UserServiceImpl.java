@@ -163,47 +163,47 @@ public class UserServiceImpl implements UserService {
                 .existsByEmailAndIsDeletedFalse(email);
     }
 
-    @Override
-    @Transactional
-    public void recordFailedLoginAttempt(UUID userId) {
-
-        User user = userRepository
-                .findByUserIdAndIsDeletedFalse(userId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException(
-                                "User not found with id: " + userId
-                        )
-                );
-
-        int failedAttempts = user.getFailedLoginAttempts() + 1;
-
-        user.setFailedLoginAttempts(failedAttempts);
-
-        if (failedAttempts >= maxFailedLoginAttempts) {
-            user.setAccountLocked(true);
-            user.setStatus(UserStatus.LOCKED);
-        }
-
-        userRepository.save(user);
-    }
-
-    @Override
-    @Transactional
-    public void recordSuccessfulLogin(UUID userId) {
-
-        User user = userRepository
-                .findByUserIdAndIsDeletedFalse(userId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException(
-                                "User not found with id: " + userId
-                        )
-                );
-
-        user.setFailedLoginAttempts(0);
-        user.setLastLoginAt(Instant.now());
-
-        userRepository.save(user);
-    }
+//    @Override
+//    @Transactional
+//    public void recordFailedLoginAttempt(UUID userId) {
+//
+//        User user = userRepository
+//                .findByUserIdAndIsDeletedFalse(userId)
+//                .orElseThrow(() ->
+//                        new ResourceNotFoundException(
+//                                "User not found with id: " + userId
+//                        )
+//                );
+//
+//        int failedAttempts = user.getFailedLoginAttempts() + 1;
+//
+//        user.setFailedLoginAttempts(failedAttempts);
+//
+//        if (failedAttempts >= maxFailedLoginAttempts) {
+//            user.setAccountLocked(true);
+//            user.setStatus(UserStatus.LOCKED);
+//        }
+//
+//        userRepository.save(user);
+//    }
+//
+//    @Override
+//    @Transactional
+//    public void recordSuccessfulLogin(UUID userId) {
+//
+//        User user = userRepository
+//                .findByUserIdAndIsDeletedFalse(userId)
+//                .orElseThrow(() ->
+//                        new ResourceNotFoundException(
+//                                "User not found with id: " + userId
+//                        )
+//                );
+//
+//        user.setFailedLoginAttempts(0);
+//        user.setLastLoginAt(Instant.now());
+//
+//        userRepository.save(user);
+//    }
 
     @Override
     @Transactional

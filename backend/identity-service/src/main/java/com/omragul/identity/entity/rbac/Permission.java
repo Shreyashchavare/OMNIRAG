@@ -4,6 +4,8 @@ import com.omragul.identity.entity.common.AuditableEntity;
 import com.omragul.identity.enums.PermissionType;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -24,6 +26,7 @@ public class Permission extends AuditableEntity {
     private UUID permissionId;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "permission_name", nullable = false, unique = true, length = 100)
     private PermissionType permissionName;
 
