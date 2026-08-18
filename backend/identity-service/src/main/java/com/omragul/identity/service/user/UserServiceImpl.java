@@ -254,6 +254,7 @@ public class UserServiceImpl implements UserService {
                 );
 
         user.setAccountLocked(true);
+        user.setStatus(UserStatus.LOCKED);
 
         userRepository.save(user);
     }
@@ -271,6 +272,8 @@ public class UserServiceImpl implements UserService {
                 );
 
         user.setAccountLocked(false);
+        user.setFailedLoginAttempts(0);
+        user.setStatus(UserStatus.ACTIVE);
 
         userRepository.save(user);
     }
