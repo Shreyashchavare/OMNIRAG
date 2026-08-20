@@ -12,7 +12,10 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -63,5 +66,17 @@ public class AuthController {
           authService.logout(request.getRefreshToken());
 
           return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/logout-all")
+    public ResponseEntity<Void> logoutAll(
+            Authentication authentication
+    ) {
+
+        UUID userId = UUID.fromString(authentication.getName());
+
+        authService.logoutAll(userId);
+
+        return ResponseEntity.noContent().build();
     }
 }

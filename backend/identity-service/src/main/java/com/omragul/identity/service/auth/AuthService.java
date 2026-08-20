@@ -6,6 +6,8 @@ import com.omragul.identity.dto.response.auth.LoginResponseDto;
 import com.omragul.identity.dto.response.auth.SignupResponseDto;
 import com.omragul.identity.dto.response.auth.TokenResponseDto;
 
+import java.util.UUID;
+
 public interface AuthService {
 
     SignupResponseDto signup(SignupRequestDto request);
@@ -15,4 +17,6 @@ public interface AuthService {
     TokenResponseDto refreshAccessToken(String refreshToken);
 
     void logout(String refreshToken);
+
+    void logoutAll(UUID userId);
 }

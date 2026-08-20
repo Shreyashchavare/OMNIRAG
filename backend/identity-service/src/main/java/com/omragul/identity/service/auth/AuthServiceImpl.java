@@ -23,6 +23,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
@@ -205,4 +207,10 @@ public class AuthServiceImpl implements AuthService {
         refreshTokenService.revokeToken(refreshToken);
     }
 
+    @Override
+    @Transactional
+    public void logoutAll(UUID userId) {
+
+        refreshTokenService.revokeAllUserTokens(userId);
+    }
 }
