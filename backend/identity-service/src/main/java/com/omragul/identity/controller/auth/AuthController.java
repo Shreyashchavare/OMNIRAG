@@ -1,6 +1,7 @@
 package com.omragul.identity.controller.auth;
 
 import com.omragul.identity.dto.request.auth.LoginRequestDto;
+import com.omragul.identity.dto.request.auth.LogoutRequestDto;
 import com.omragul.identity.dto.request.auth.RefreshTokenRequestDto;
 import com.omragul.identity.dto.request.auth.SignupRequestDto;
 import com.omragul.identity.dto.response.auth.LoginResponseDto;
@@ -53,5 +54,14 @@ public class AuthController {
                 authService.refreshAccessToken(request.getRefreshToken());
 
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(
+            @Valid @RequestBody LogoutRequestDto request
+    ) {
+          authService.logout(request.getRefreshToken());
+
+          return ResponseEntity.noContent().build();
     }
 }
