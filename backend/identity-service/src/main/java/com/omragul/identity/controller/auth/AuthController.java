@@ -1,9 +1,11 @@
 package com.omragul.identity.controller.auth;
 
 import com.omragul.identity.dto.request.auth.LoginRequestDto;
+import com.omragul.identity.dto.request.auth.RefreshTokenRequestDto;
 import com.omragul.identity.dto.request.auth.SignupRequestDto;
 import com.omragul.identity.dto.response.auth.LoginResponseDto;
 import com.omragul.identity.dto.response.auth.SignupResponseDto;
+import com.omragul.identity.dto.response.auth.TokenResponseDto;
 import com.omragul.identity.service.auth.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +40,17 @@ public class AuthController {
 
         LoginResponseDto response =
                 authService.login(request);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<TokenResponseDto> refreshAccessToken(
+            @Valid @RequestBody RefreshTokenRequestDto request
+    ) {
+
+        TokenResponseDto response =
+                authService.refreshAccessToken(request.getRefreshToken());
 
         return ResponseEntity.ok(response);
     }

@@ -4,7 +4,9 @@ import com.omragul.identity.dto.request.auth.LoginRequestDto;
 import com.omragul.identity.dto.request.auth.SignupRequestDto;
 import com.omragul.identity.dto.response.auth.LoginResponseDto;
 import com.omragul.identity.dto.response.auth.SignupResponseDto;
+import com.omragul.identity.dto.response.auth.TokenResponseDto;
 import com.omragul.identity.dto.response.user.UserResponseDto;
+import com.omragul.identity.entity.auth.RefreshToken;
 import com.omragul.identity.entity.user.User;
 import com.omragul.identity.enums.UserStatus;
 import com.omragul.identity.exception.IdentityException;
@@ -160,4 +162,40 @@ public class AuthServiceImpl implements AuthService {
                 userResponse
         );
     }
+
+    @Override
+    @Transactional
+    public TokenResponseDto refreshAccessToken(String refreshToken) {
+
+        // <----Refresh token rotation--->//
+        // 1.Validate the refresh token
+        RefreshToken storedRefreshToken = refreshTokenService.validateToken(refreshToken);
+
+        // 2.Get the user associated with the refresh token
+        User user = storedRefreshToken.getUser();
+
+        // 3.Generate new JWT access token
+        String accessToken = jwtService.generateAccessToken(user);
+
+        // 4.Revoke the old refresh token
+        refreshTokenService.revokeToken(refreshToken);
+
+        // 5.Generate a new refresh token
+        String newRefreshToken =
+                refreshTokenService.createToken(
+                        user.getUserId(),
+                        storedRefreshToken.getDeviceName(),
+                        storedRefreshToken.getIpAddress(),
+                        storedRefreshToken.getUserAgent()
+                );
+
+        // 6.Return both new tokens
+        return new TokenResponseDto(
+                accessToken,
+                refreshToken,
+                "Bearer",
+                jwtExpirationMinutes * 60L
+        );
+    }
+
 }

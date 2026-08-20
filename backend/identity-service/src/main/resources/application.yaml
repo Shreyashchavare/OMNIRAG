@@ -1,4 +1,7 @@
 spring:
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+
   application:
     name: identity-service
 
@@ -35,3 +38,5 @@ identity:
 
   security:
     max-failed-login-attempts: 5
+
+
