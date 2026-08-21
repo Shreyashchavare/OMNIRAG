@@ -53,6 +53,8 @@ public enum PermissionType {
     KNOWLEDGE_UPDATE,
     KNOWLEDGE_DELETE,
 
+    KNOWLEDGE_CONTENT_UPLOAD,
+
     // ==========================
     // EMBEDDINGS
     // ==========================
@@ -60,15 +62,17 @@ public enum PermissionType {
     EMBEDDING_DELETE,
 
     // ==========================
-    // MULTIMODAL
+    // MULTIMODAL QUERY
     // ==========================
-    IMAGE_UPLOAD,
+    MULTIMODAL_IMAGE_QUERY,
+    MULTIMODAL_AUDIO_QUERY,
+    MULTIMODAL_VIDEO_QUERY,
+
+    // ==========================
+    // MULTIMODAL PROCESSING
+    // ==========================
     IMAGE_PROCESS,
-
-    AUDIO_UPLOAD,
     AUDIO_PROCESS,
-
-    VIDEO_UPLOAD,
     VIDEO_PROCESS,
 
     // ==========================
@@ -82,6 +86,13 @@ public enum PermissionType {
     AGENT_EXECUTE,
 
     // ==========================
+    // MODEL
+    // ==========================
+    MODEL_QUERY,
+    MODEL_TEST,
+    MODEL_EVALUATE,
+
+    // ==========================
     // ANALYTICS
     // ==========================
     ANALYTICS_READ,
@@ -92,11 +103,16 @@ public enum PermissionType {
     NOTIFICATION_SEND,
 
     // ==========================
+    // APPROVAL
+    // ==========================
+    APPROVAL_READ,
+    APPROVAL_APPROVE,
+    APPROVAL_REJECT,
+
+    // ==========================
     // SYSTEM
     // ==========================
     SYSTEM_SETTINGS,
-
     SYSTEM_MONITOR,
-
     SYSTEM_BACKUP
 }
