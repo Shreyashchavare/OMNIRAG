@@ -9,6 +9,7 @@ import com.omragul.identity.service.user.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -21,6 +22,7 @@ public class UserController {
     private final UserService userService;
     private final UserProfileService userProfileService;
 
+    @PreAuthorize("hasAuthority('USER_READ')")
     @GetMapping("/{userId}")
     public ResponseEntity<UserResponseDto> getUser(
             @PathVariable UUID userId
@@ -31,6 +33,7 @@ public class UserController {
         );
     }
 
+    @PreAuthorize("hasAuthority('USER_UPDATE')")
     @PutMapping("/{userId}")
     public ResponseEntity<UserResponseDto> updateUser(
             @PathVariable UUID userId,
@@ -42,6 +45,7 @@ public class UserController {
         );
     }
 
+    @PreAuthorize("hasAuthority('USER_DELETE')")
     @DeleteMapping("/{userId}")
     public ResponseEntity<Void> deleteUser(
             @PathVariable UUID userId
@@ -52,6 +56,7 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
+    @PreAuthorize("hasAuthority('USER_RESTORE')")
     @PatchMapping("/{userId}/restore")
     public ResponseEntity<Void> restoreUser(
             @PathVariable UUID userId
@@ -62,6 +67,7 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
+    @PreAuthorize("hasAuthority('USER_LOCK')")
     @PatchMapping("/{userId}/lock")
     public ResponseEntity<Void> lockUser(
             @PathVariable UUID userId
@@ -72,6 +78,7 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
+    @PreAuthorize("hasAuthority('USER_UNLOCK')")
     @PatchMapping("/{userId}/unlock")
     public ResponseEntity<Void> unlockUser(
             @PathVariable UUID userId
@@ -82,6 +89,7 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
+    @PreAuthorize("hasAuthority('USER_PROFILE_READ')")
     @GetMapping("/{userId}/profile")
     public ResponseEntity<UserProfileResponseDto> getProfile(
             @PathVariable UUID userId
@@ -92,6 +100,7 @@ public class UserController {
         );
     }
 
+    @PreAuthorize("hasAuthority('USER_PROFILE_UPDATE')")
     @PutMapping("/{userId}/profile")
     public ResponseEntity<UserProfileResponseDto> updateProfile(
             @PathVariable UUID userId,

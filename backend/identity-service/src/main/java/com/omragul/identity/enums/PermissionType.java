@@ -10,6 +10,10 @@ public enum PermissionType {
     USER_UPDATE,
     USER_DELETE,
 
+    USER_LOCK,
+    USER_UNLOCK,
+    USER_RESTORE,
+
     USER_PROFILE_READ,
     USER_PROFILE_UPDATE,
 

@@ -7,12 +7,17 @@ import com.omragul.identity.dto.response.auth.SignupResponseDto;
 import com.omragul.identity.dto.response.auth.TokenResponseDto;
 import com.omragul.identity.dto.response.user.UserResponseDto;
 import com.omragul.identity.entity.auth.RefreshToken;
+import com.omragul.identity.entity.rbac.Role;
+import com.omragul.identity.entity.rbac.UserRole;
 import com.omragul.identity.entity.user.User;
+import com.omragul.identity.enums.RoleType;
 import com.omragul.identity.enums.UserStatus;
 import com.omragul.identity.exception.IdentityException;
 import com.omragul.identity.exception.UserAlreadyExistsException;
 import com.omragul.identity.exception.UserLockedException;
 import com.omragul.identity.mapper.UserMapper;
+import com.omragul.identity.repository.RoleRepository;
+import com.omragul.identity.repository.UserRoleRepository;
 import com.omragul.identity.service.security.JwtService;
 import com.omragul.identity.service.security.LoginAttemptService;
 import com.omragul.identity.service.security.PasswordService;
@@ -35,6 +40,9 @@ public class AuthServiceImpl implements AuthService {
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
     private final LoginAttemptService loginAttemptService;
+
+    private final UserRoleRepository userRoleRepository;
+    private final RoleRepository roleRepository;
 
     @Value("${identity.jwt.expiration-minutes}")
     private long jwtExpirationMinutes;
@@ -69,7 +77,24 @@ public class AuthServiceImpl implements AuthService {
                 request.getProfile()
         );
 
-        // 5. Convert user entity to response
+        // 5. Assign default USER role
+        Role userRole = roleRepository
+                .findByRoleName(RoleType.USER)
+                .orElseThrow(() ->
+                        new IdentityException(
+                                "Default USER role not found"
+                        )
+                );
+
+        UserRole userRoleMapping = UserRole.builder()
+                .user(user)
+                .role(userRole)
+                .assignedBy(null)
+                .build();
+
+        userRoleRepository.save(userRoleMapping);
+
+        // 6. Convert user entity to response
         UserResponseDto userResponse =
                 userMapper.toResponseDto(user);
 

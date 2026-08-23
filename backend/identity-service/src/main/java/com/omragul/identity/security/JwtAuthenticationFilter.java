@@ -1,25 +1,30 @@
 package com.omragul.identity.security;
 
 import com.omragul.identity.service.security.JwtService;
+import com.omragul.identity.service.security.RbacAuthorizationService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Collections;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
-public class JwtAuthenticationFilter extends OncePerRequestFilter {
+public class JwtAuthenticationFilter
+        extends OncePerRequestFilter {
 
     private final JwtService jwtService;
+    private final RbacAuthorizationService rbacAuthorizationService;
 
     @Override
     protected void doFilterInternal(
@@ -50,17 +55,29 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         // Extract user ID from JWT
-        UUID userId = jwtService.extractUserId(token);
+        UUID userId =
+                jwtService.extractUserId(token);
+
+        // Get user's permissions
+        Set<String> permissions =
+                rbacAuthorizationService
+                        .getUserPermissions(userId);
+
+        // Convert permissions to Spring authorities
+        var authorities =
+                permissions.stream()
+                        .map(SimpleGrantedAuthority::new)
+                        .collect(Collectors.toSet());
 
         // Create authenticated user
         UsernamePasswordAuthenticationToken authentication =
                 new UsernamePasswordAuthenticationToken(
                         userId,
                         null,
-                        Collections.emptyList()
+                        authorities
                 );
 
-        // Store authentication in SecurityContext
+        // Store authentication
         SecurityContextHolder
                 .getContext()
                 .setAuthentication(authentication);

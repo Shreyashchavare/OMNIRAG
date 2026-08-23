@@ -1,5 +1,5 @@
 -- ============================================================================
--- OMNI RAG Identity Service
+-- OMNIRAG Identity Service
 -- V8: Update PermissionType enum for multimodal RAG RBAC
 -- ============================================================================
 
