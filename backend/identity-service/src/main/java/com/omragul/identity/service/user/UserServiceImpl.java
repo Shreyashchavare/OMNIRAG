@@ -1,15 +1,24 @@
 package com.omragul.identity.service.user;
 
+import com.omragul.identity.dto.request.user.CreateUserRequestDto;
 import com.omragul.identity.dto.request.user.SignupProfileRequestDto;
 import com.omragul.identity.dto.request.user.UpdateUserRequestDto;
 import com.omragul.identity.dto.response.user.UserResponseDto;
+import com.omragul.identity.entity.rbac.Role;
+import com.omragul.identity.entity.rbac.UserRole;
 import com.omragul.identity.entity.user.User;
 import com.omragul.identity.entity.user.UserProfile;
+import com.omragul.identity.enums.RoleType;
 import com.omragul.identity.enums.UserStatus;
+import com.omragul.identity.exception.IdentityException;
 import com.omragul.identity.exception.ResourceNotFoundException;
+import com.omragul.identity.exception.UserAlreadyExistsException;
 import com.omragul.identity.mapper.UserMapper;
 import com.omragul.identity.mapper.UserProfileMapper;
+import com.omragul.identity.repository.RoleRepository;
 import com.omragul.identity.repository.UserRepository;
+import com.omragul.identity.repository.UserRoleRepository;
+import com.omragul.identity.service.security.PasswordService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -25,6 +34,10 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final UserProfileMapper userProfileMapper;
+    private final RoleRepository roleRepository;
+    private final UserRoleRepository userRoleRepository;
+
+    private final PasswordService passwordService;
 
     @Value("${identity.security.max-failed-login-attempts}")
     private int maxFailedLoginAttempts;
@@ -56,6 +69,61 @@ public class UserServiceImpl implements UserService {
         user.setUserProfile(userProfile);
 
         return userRepository.save(user);
+    }
+
+    @Override
+    @Transactional
+    public UserResponseDto createUserByAdmin(
+            CreateUserRequestDto request,
+            UUID assignedBy
+    ) {
+
+        // 1. Check username
+        if (existsByUsername(request.getUsername())) {
+            throw new UserAlreadyExistsException(
+                    "Username already exists: " + request.getUsername()
+            );
+        }
+
+        // 2. Check email
+        if (existsByEmail(request.getEmail())) {
+            throw new UserAlreadyExistsException(
+                    "Email already exists: " + request.getEmail()
+            );
+        }
+
+        // 3. Hash password
+        String passwordHash =
+                passwordService.hashPassword(request.getPassword());
+
+        // 4. Create user + profile
+        User user = createUser(
+                request.getUsername(),
+                request.getEmail(),
+                passwordHash,
+                request.getProfile()
+        );
+
+        // 5. Find default USER role
+        Role userRole = roleRepository
+                .findByRoleName(RoleType.USER)
+                .orElseThrow(() ->
+                        new IdentityException(
+                                "Default USER role not found"
+                        )
+                );
+
+        // 6. Assign USER role
+        UserRole userRoleMapping = UserRole.builder()
+                .user(user)
+                .role(userRole)
+                .assignedBy(assignedBy)
+                .build();
+
+        userRoleRepository.save(userRoleMapping);
+
+        // 7. Return response
+        return userMapper.toResponseDto(user);
     }
 
     @Override

@@ -1,5 +1,6 @@
 package com.omragul.identity.controller.user;
 
+import com.omragul.identity.dto.request.user.CreateUserRequestDto;
 import com.omragul.identity.dto.request.user.UpdateUserProfileRequestDto;
 import com.omragul.identity.dto.request.user.UpdateUserRequestDto;
 import com.omragul.identity.dto.response.user.UserProfileResponseDto;
@@ -8,8 +9,10 @@ import com.omragul.identity.service.user.UserProfileService;
 import com.omragul.identity.service.user.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -21,6 +24,26 @@ public class UserController {
 
     private final UserService userService;
     private final UserProfileService userProfileService;
+
+    @PreAuthorize("hasAuthority('USER_CREATE')")
+    @PostMapping
+    public ResponseEntity<UserResponseDto> createUser(
+            @Valid @RequestBody CreateUserRequestDto request,
+            Authentication authentication
+    ) {
+
+        UUID adminUserId =
+                (UUID) authentication.getPrincipal();
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(
+                        userService.createUserByAdmin(
+                                request,
+                                adminUserId
+                        )
+                );
+    }
 
     @PreAuthorize("hasAuthority('USER_READ')")
     @GetMapping("/{userId}")

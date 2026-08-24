@@ -1,5 +1,6 @@
 package com.omragul.identity.service.user;
 
+import com.omragul.identity.dto.request.user.CreateUserRequestDto;
 import com.omragul.identity.dto.request.user.SignupProfileRequestDto;
 import com.omragul.identity.dto.request.user.UpdateUserRequestDto;
 import com.omragul.identity.dto.response.user.UserResponseDto;
@@ -23,6 +24,10 @@ public interface UserService {
 //            SignupProfileRequestDto profile
 //    );
 
+    UserResponseDto createUserByAdmin(
+        CreateUserRequestDto request,
+        UUID assignedBy
+    );
 
     User getUserEntityByUsername(String username);
 
