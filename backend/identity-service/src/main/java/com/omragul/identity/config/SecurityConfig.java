@@ -1,5 +1,6 @@
 package com.omragul.identity.config;
 
+import com.omragul.identity.security.JwtAuthenticationEntryPoint;
 import com.omragul.identity.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -17,6 +18,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -30,6 +32,12 @@ public class SecurityConfig {
 
         http
                 .csrf(csrf -> csrf.disable())
+
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint(
+                                jwtAuthenticationEntryPoint
+                        )
+                )
 
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
