@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.HashSet;
 import java.util.UUID;
 import java.util.Set;
 
@@ -18,5 +19,5 @@ public class RoleResponseDto {
 
     private String description;
 
-    private Set<PermissionResponseDto> permissions;
+    private Set<PermissionResponseDto> permissions = new HashSet<>();
 }
