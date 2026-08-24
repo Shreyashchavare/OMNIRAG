@@ -7,4 +7,5 @@ public interface RbacAuthorizationService {
 
     Set<String> getUserPermissions(UUID userId);
 
+    Set<String> getUserRoles(UUID userId);
 }

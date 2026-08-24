@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Component
 @RequiredArgsConstructor
@@ -63,11 +64,18 @@ public class JwtAuthenticationFilter
                 rbacAuthorizationService
                         .getUserPermissions(userId);
 
-        // Convert permissions to Spring authorities
-        var authorities =
-                permissions.stream()
-                        .map(SimpleGrantedAuthority::new)
-                        .collect(Collectors.toSet());
+        // Get user's roles (required for Object-Level-Authorization)
+        Set<String> roles =
+                rbacAuthorizationService.getUserRoles(userId);
+
+        // Convert permissions and roles to Spring authorities
+        var authorities = Stream.concat(
+                        permissions.stream(),
+                        roles.stream()
+                                .map(role -> "ROLE_" + role)
+                )
+                .map(SimpleGrantedAuthority::new)
+                .collect(Collectors.toSet());
 
         // Create authenticated user
         UsernamePasswordAuthenticationToken authentication =

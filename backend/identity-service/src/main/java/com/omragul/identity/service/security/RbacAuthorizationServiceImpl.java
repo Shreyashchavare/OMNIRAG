@@ -12,6 +12,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -54,5 +55,20 @@ public class RbacAuthorizationServiceImpl
         }
 
         return permissions;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Set<String> getUserRoles(UUID userId) {
+
+        return userRoleRepository
+                .findByUserUserId(userId)
+                .stream()
+                .map(userRole ->
+                        userRole.getRole()
+                                .getRoleName()
+                                .name()
+                )
+                .collect(Collectors.toSet());
     }
 }
