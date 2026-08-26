@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic-settings
+pytesseract
+Pillow
+faster-whisper
+PyMuPDF
+httpx
