@@ -113,7 +113,6 @@ frontend/build/
 ############################
 # Docker
 ############################
-**/.dockerignore
 docker-compose.override.yml
 
 ############################
@@ -190,4 +189,4 @@ reports/
 ############################
 # Windows
 ############################
-Desktop.ini.env
+Desktop.ini
