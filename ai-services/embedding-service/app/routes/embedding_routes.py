@@ -27,7 +27,8 @@ async def create_embedding(request: EmbeddingRequest):
 
         return {
             "model": embedding_service.model,
-            "embedding": embedding
+            "embedding": embedding,
+            "dimension": len(embedding)
         }
 
     except Exception as e:
@@ -51,7 +52,8 @@ async def create_batch_embeddings(
 
         return {
             "model": embedding_service.model,
-            "embeddings": embeddings
+            "embeddings": embeddings,
+            "dimension": len(embeddings[0])
         }
 
     except Exception as e:
