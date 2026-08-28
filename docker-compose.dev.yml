@@ -74,7 +74,6 @@ services:
       - embedding-service
       - rag-service
       - multimodal-service
-      - agent-service
     networks:
       - omragul-network
 
@@ -109,19 +108,23 @@ services:
   embedding-service:
     build:
       context: ./ai-services/embedding-service
+      dockerfile: Dockerfile
     container_name: embedding-service
     ports:
-      - "8001:8000"
+      - "8003:8003"
     restart: unless-stopped
+    depends_on:
+      - ollama
     networks:
       - omragul-network
 
   rag-service:
     build:
       context: ./ai-services/rag-service
+      dockerfile: Dockerfile
     container_name: rag-service
     ports:
-      - "8002:8000"
+      - "8002:8002"
     restart: unless-stopped
     depends_on:
       - ollama
@@ -131,9 +134,10 @@ services:
   multimodal-service:
     build:
       context: ./ai-services/multimodal-service
+      dockerfile: Dockerfile
     container_name: multimodal-service
     ports:
-      - "8003:8000"
+      - "8004:8004"
     restart: unless-stopped
     depends_on:
       - ollama
