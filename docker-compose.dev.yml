@@ -149,9 +149,10 @@ services:
       context: ./ai-services/agent-service
     container_name: agent-service
     ports:
-      - "8004:8000"
+      - "8000:8000"
     restart: unless-stopped
     depends_on:
+      - rag-service
       - ollama
     networks:
       - omragul-network
