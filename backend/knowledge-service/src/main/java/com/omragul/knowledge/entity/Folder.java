@@ -28,8 +28,11 @@ public class Folder extends AuditableEntity {
     @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
 
-    @Column(name = "folder_name", nullable = false, length = 150)
-    private String folderName;
+    @Column(name = "name", nullable = false, length = 150)
+    private String name;
+
+    @Column(name = "description", length = 500)
+    private String description;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "knowledge_base_id", nullable = false)

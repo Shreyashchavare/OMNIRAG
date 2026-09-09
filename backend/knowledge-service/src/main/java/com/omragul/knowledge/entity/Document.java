@@ -11,8 +11,11 @@ import java.util.UUID;
 @Table(
         name = "documents",
         indexes = {
+                @Index(name = "idx_documents_knowledge_base_id", columnList = "knowledge_base_id"),
                 @Index(name = "idx_documents_folder_id", columnList = "folder_id"),
-                @Index(name = "idx_documents_uploaded_by", columnList = "uploaded_by")
+                @Index(name = "idx_documents_owner_id", columnList = "owner_id"),
+                @Index(name = "idx_documents_file_hash", columnList = "file_hash"),
+                @Index(name = "idx_documents_status", columnList = "status")
         }
 )
 @Getter
@@ -28,25 +31,39 @@ public class Document extends AuditableEntity {
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "folder_id", nullable = false)
+    @JoinColumn(
+            name = "knowledge_base_id",
+            nullable = false
+    )
+    private KnowledgeBase knowledgeBase;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+            name = "folder_id"
+    )
     private Folder folder;
 
-    @Column(name = "uploaded_by", nullable = false)
-    private UUID uploadedBy;
+    @Column(name = "owner_id", nullable = false)
+    private UUID ownerId;
 
-    @Column(name = "file_name", nullable = false, length = 255)
-    private String fileName;
+    @Column(name = "original_filename", nullable = false, length = 255)
+    private String originalFilename;
 
-    @Column(name = "mime_type", nullable = false, length = 100)
-    private String mimeType;
+    @Column(name = "stored_filename", nullable = false, length = 255)
+    private String storedFilename;
 
-    @Column(name = "storage_path", nullable = false, length = 500)
+    @Column(name = "content_type", nullable = false, length = 100)
+    private String contentType;
+
+    @Column(name = "file_size", nullable = false)
+    private Long fileSize;
+
+    @Column(name = "file_hash", length = 128)
+    private String fileHash;
+
+    @Column(name = "storage_path", nullable = false, length = 1000)
     private String storagePath;
 
-    @Column(name = "checksum", nullable = false, length = 128)
-    private String checksum;
-
-    // Add the exact enum mapping here after we align it with V2 migration.
     @Enumerated(EnumType.STRING)
     @Column(
             name = "status",
@@ -54,5 +71,4 @@ public class Document extends AuditableEntity {
             columnDefinition = "document_status"
     )
     private DocumentStatus status;
-
 }
