@@ -1,7 +1,7 @@
+
 name: omragul-dev
 
 services:
-
   # ==========================================================
   # FRONTEND
   # ==========================================================
@@ -11,13 +11,12 @@ services:
       dockerfile: Dockerfile
     container_name: omragul-frontend
     ports:
-      - "3000:80"
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:80"
     restart: unless-stopped
     depends_on:
       - gateway-service
     networks:
       - omragul-network
-
 
   # ==========================================================
   # JAVA MICROSERVICES
@@ -28,7 +27,7 @@ services:
       dockerfile: Dockerfile
     container_name: gateway-service
     ports:
-      - "8080:8080"
+      - "127.0.0.1:${GATEWAY_PORT:-8080}:8080"
     restart: unless-stopped
     depends_on:
       - identity-service
@@ -41,24 +40,47 @@ services:
       dockerfile: Dockerfile
     container_name: identity-service
     ports:
-      - "8081:8080"
+      - "127.0.0.1:${IDENTITY_PORT:-8081}:8080"
     restart: unless-stopped
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: ${IDENTITY_DATASOURCE_URL:?Set IDENTITY_DATASOURCE_URL in .env}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
     networks:
       - omragul-network
 
+  # ==========================================================
+  # KNOWLEDGE SERVICE
+  # ==========================================================
   knowledge-service:
     build:
       context: ./backend/knowledge-service
       dockerfile: Dockerfile
     container_name: knowledge-service
     ports:
-      - "8082:8080"
+      - "127.0.0.1:${KNOWLEDGE_PORT:-8082}:8080"
     restart: unless-stopped
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/knowledge_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_FLYWAY_LOCATIONS: filesystem:/app/migrations
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
+      SPRING_PROFILES_ACTIVE: docker
+    volumes:
+      - ./databases/knowledge-service:/app/migrations:ro
     networks:
       - omragul-network
 
@@ -68,13 +90,18 @@ services:
       dockerfile: Dockerfile
     container_name: processing-service
     ports:
-      - "8083:8080"
+      - "127.0.0.1:${PROCESSING_PORT:-8083}:8080"
     restart: unless-stopped
     depends_on:
       - embedding-service
       - rag-service
       - multimodal-service
       - agent-service
+    environment:
+      EMBEDDING_SERVICE_URL: http://embedding-service:8000
+      RAG_SERVICE_URL: http://rag-service:8000
+      MULTIMODAL_SERVICE_URL: http://multimodal-service:8000
+      AGENT_SERVICE_URL: http://agent-service:8000
     networks:
       - omragul-network
 
@@ -84,10 +111,15 @@ services:
       dockerfile: Dockerfile
     container_name: analytics-service
     ports:
-      - "8084:8080"
+      - "127.0.0.1:${ANALYTICS_PORT:-8084}:8080"
     restart: unless-stopped
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: ${ANALYTICS_DATASOURCE_URL:?Set ANALYTICS_DATASOURCE_URL in .env}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     networks:
       - omragul-network
 
@@ -97,11 +129,10 @@ services:
       dockerfile: Dockerfile
     container_name: notification-service
     ports:
-      - "8085:8080"
+      - "127.0.0.1:${NOTIFICATION_PORT:-8085}:8080"
     restart: unless-stopped
     networks:
       - omragul-network
-
 
   # ==========================================================
   # PYTHON AI SERVICES
@@ -109,9 +140,10 @@ services:
   embedding-service:
     build:
       context: ./ai-services/embedding-service
+      dockerfile: Dockerfile
     container_name: embedding-service
     ports:
-      - "8001:8000"
+      - "127.0.0.1:${EMBEDDING_PORT:-8001}:8000"
     restart: unless-stopped
     networks:
       - omragul-network
@@ -119,89 +151,117 @@ services:
   rag-service:
     build:
       context: ./ai-services/rag-service
+      dockerfile: Dockerfile
     container_name: rag-service
     ports:
-      - "8002:8000"
+      - "127.0.0.1:${RAG_PORT:-8002}:8000"
     restart: unless-stopped
     depends_on:
       - ollama
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
     networks:
       - omragul-network
 
   multimodal-service:
     build:
       context: ./ai-services/multimodal-service
+      dockerfile: Dockerfile
     container_name: multimodal-service
     ports:
-      - "8003:8000"
+      - "127.0.0.1:${MULTIMODAL_PORT:-8003}:8000"
     restart: unless-stopped
     depends_on:
       - ollama
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
     networks:
       - omragul-network
 
   agent-service:
     build:
       context: ./ai-services/agent-service
+      dockerfile: Dockerfile
     container_name: agent-service
     ports:
-      - "8004:8000"
+      - "127.0.0.1:${AGENT_PORT:-8004}:8000"
     restart: unless-stopped
     depends_on:
       - ollama
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
     networks:
       - omragul-network
 
-
   # ==========================================================
-  # DATABASES
+  # POSTGRESQL
   # ==========================================================
   postgres:
     image: postgres:17
     container_name: postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: omragul
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      - ./databases/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     networks:
       - omragul-network
 
+  # ==========================================================
+  # REDIS
+  # ==========================================================
   redis:
     image: redis:8-alpine
     container_name: redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-    networks:
-      - omragul-network
 
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+
+    # Keep your existing ports, volumes,
+    # healthcheck, and networks below.
 
   # ==========================================================
-  # PGADMIN
+  # PGADMIN - OPTIONAL DEVELOPMENT TOOL
   # ==========================================================
   pgadmin:
     image: dpage/pgadmin4:9
     container_name: pgadmin
+    profiles:
+      - tools
     restart: unless-stopped
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@omragul.ai
-      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:?Set PGADMIN_DEFAULT_EMAIL in .env}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?Set PGADMIN_DEFAULT_PASSWORD in .env}
     ports:
-      - "5050:80"
+      - "127.0.0.1:${PGADMIN_PORT:-5050}:80"
     volumes:
       - pgadmin-data:/var/lib/pgadmin
     networks:
       - omragul-network
-
 
   # ==========================================================
   # OLLAMA
@@ -211,12 +271,11 @@ services:
     container_name: ollama
     restart: unless-stopped
     ports:
-      - "11434:11434"
+      - "127.0.0.1:${OLLAMA_PORT:-11434}:11434"
     volumes:
       - ollama-data:/root/.ollama
     networks:
       - omragul-network
-
 
 # ==========================================================
 # NETWORK
@@ -225,9 +284,8 @@ networks:
   omragul-network:
     driver: bridge
 
-
 # ==========================================================
-# VOLUMES
+# PERSISTENT VOLUMES
 # ==========================================================
 volumes:
   postgres-data:
