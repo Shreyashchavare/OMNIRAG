@@ -1,33 +1,31 @@
-HELP.md
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+!.env.template
+
+# Java / Maven / Gradle build output
 target/
-.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
+build/
+.gradle/
+*.class
 
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-
-### IntelliJ IDEA ###
-.idea
-*.iws
+# IDE files
+.idea/
+.vscode/
 *.iml
 *.ipr
+*.iws
 
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
 
-### VS Code ###
-.vscode/
+# Logs and local runtime files
+*.log
+logs/
+
+# Local test / coverage output
+coverage/
+.jacoco/
