@@ -1,0 +1,32 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: gateway-service-test
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+
+gateway:
+  services:
+    identity:
+      url: http://localhost:8081
+    knowledge:
+      url: http://localhost:8082
+    processing:
+      url: http://localhost:8083
+    analytics:
+      url: http://localhost:8084
+    notification:
+      url: http://localhost:8085
+
+  http:
+    connect-timeout-ms: 1000
+    read-timeout-ms: 2000
+
+  cors:
+    allowed-origin: http://localhost:3000
+
+  jwt:
+    public-key: classpath:certs/test_public_key.pem
+    issuer: http://localhost:8080
