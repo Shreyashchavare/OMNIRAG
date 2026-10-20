@@ -31,3 +31,136 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# ============================================================================
+# Secrets and local environment
+# ============================================================================
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+secrets/
+**/secrets/
+
+# ============================================================================
+# Java / Maven / Spring Boot
+# ============================================================================
+**/target/
+**/build/
+*.class
+*.jar
+*.war
+*.ear
+hs_err_pid*
+replay_pid*
+
+# ============================================================================
+# Node.js / React / frontend
+# ============================================================================
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+dist/
+**/dist/
+.vite/
+coverage/
+
+# ============================================================================
+# Python / FastAPI / AI services
+# ============================================================================
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.venv/
+venv/
+env/
+ENV/
+pip-wheel-metadata/
+*.egg-info/
+
+# ============================================================================
+# IDEs and editors
+# ============================================================================
+.idea/
+.vscode/
+*.iml
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.swp
+*.swo
+*~
+
+# ============================================================================
+# Operating system
+# ============================================================================
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+Desktop.ini
+
+# ============================================================================
+# Logs and temporary files
+# ============================================================================
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.bak
+*.orig
+*.rej
+
+# ============================================================================
+# Local databases, uploads, generated artifacts, and model caches
+# Do not ignore schema migrations, source fixtures, or checked-in examples.
+# ============================================================================
+*.sqlite
+*.sqlite3
+*.db
+storage/uploads/
+storage/processed/
+storage/temp/
+storage/logs/
+models/
+ollama-data/
+postgres-data/
+redis-data/
+pgadmin-data/
+faiss/indexes/
+faiss/cache/
+**/faiss/indexes/
+**/faiss/cache/
+chroma.sqlite3
+
+# ============================================================================
+# Docker / local override artifacts
+# ============================================================================
+docker-compose.override.yml
+docker-compose.override.yaml
+
+# ============================================================================
+# Local tooling / reports
+# ============================================================================
+.ipynb_checkpoints/
+.DS_Store
