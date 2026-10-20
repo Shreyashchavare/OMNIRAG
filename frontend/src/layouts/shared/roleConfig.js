@@ -1,0 +1,32 @@
+export const ROLE_CONFIG = {
+  admin: {
+    sidebarLetter: 'A',
+    panelLabel: 'Admin Panel',
+    sidebarAvatarBg: '#ea580c',
+    topAvatarInitials: 'AD',
+    topAvatarBg: '#ea580c',
+    dropdownName: 'Admin User',
+    dropdownRole: 'Administrator',
+    dropdownLetter: 'A',
+  },
+  controller: {
+    sidebarLetter: 'C',
+    panelLabel: 'Controller Panel',
+    sidebarAvatarBg: '#7c3aed',
+    topAvatarInitials: 'CT',
+    topAvatarBg: '#7c3aed',
+    dropdownName: 'Controller User',
+    dropdownRole: 'Controller',
+    dropdownLetter: 'C',
+  },
+  user: {
+    sidebarLetter: 'U',
+    panelLabel: 'User Panel',
+    sidebarAvatarBg: '#0891b2',
+    topAvatarInitials: 'US',
+    topAvatarBg: '#0891b2',
+    dropdownName: 'Standard User',
+    dropdownRole: 'Viewer',
+    dropdownLetter: 'U',
+  },
+};

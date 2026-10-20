@@ -1,122 +1,99 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import { NotificationProvider } from './contexts/NotificationContext';
+import { ProtectedRoute } from './components/ProtectedRoute';
 
-function App() {
-  const [count, setCount] = useState(0)
+// Layouts
+import { AdminLayout } from './layouts/AdminLayout';
+import { ControllerLayout } from './layouts/ControllerLayout';
+import { UserLayout } from './layouts/UserLayout';
 
+// Public Pages
+import LandingPage from './pages/LandingPage';
+import AuthPage from './pages/AuthPage';
+
+// Admin Pages
+import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminDocuments from './pages/admin/AdminDocuments';
+import AdminAnalytics from './pages/admin/AdminAnalytics';
+import UserManagement from './pages/admin/UserManagement';
+
+// Controller Pages
+import ControllerDashboard from './pages/controller/ControllerDashboard';
+import UploadDocs from './pages/controller/UploadDocs';
+import Testing from './pages/controller/Testing';
+import RequestApproval from './pages/controller/RequestApproval';
+import ModelDashboard from './pages/controller/ModelDashboard';
+
+// User Pages
+import ChatPage from './pages/user/ChatPage';
+import ChatHistory from './pages/user/ChatHistory';
+import HelpPage from './pages/user/HelpPage';
+
+export default function App() {
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <BrowserRouter>
+      <AuthProvider>
+        <NotificationProvider>
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/login" element={<AuthPage initialView="login" />} />
+            <Route path="/signup" element={<AuthPage initialView="signup" />} />
 
-      <div className="ticks"></div>
+            {/* Admin Workspace */}
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Navigate to="/admin/dashboard" replace />} />
+              <Route path="dashboard" element={<AdminDashboard />} />
+              <Route path="documents" element={<AdminDocuments />} />
+              <Route path="analytics" element={<AdminAnalytics />} />
+              <Route path="users" element={<UserManagement />} />
+            </Route>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+            {/* Controller Workspace */}
+            <Route
+              path="/controller"
+              element={
+                <ProtectedRoute allowedRoles={['controller', 'admin']}>
+                  <ControllerLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Navigate to="/controller/dashboard" replace />} />
+              <Route path="dashboard" element={<ControllerDashboard />} />
+              <Route path="upload" element={<UploadDocs />} />
+              <Route path="testing" element={<Testing />} />
+              <Route path="approval" element={<RequestApproval />} />
+              <Route path="models" element={<ModelDashboard />} />
+            </Route>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+            {/* Standard User Workspace */}
+            <Route
+              path="/user"
+              element={
+                <ProtectedRoute allowedRoles={['user', 'controller', 'admin']}>
+                  <UserLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Navigate to="/user/chat" replace />} />
+              <Route path="chat" element={<ChatPage />} />
+              <Route path="history" element={<ChatHistory />} />
+              <Route path="help" element={<HelpPage />} />
+            </Route>
+
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </NotificationProvider>
+      </AuthProvider>
+    </BrowserRouter>
+  );
 }
-
-export default App
