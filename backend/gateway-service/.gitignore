@@ -38,6 +38,16 @@ build/
 !.env.example
 !.env.template
 
+# Secrets and private keys
+*.key
+*.p12
+*.pfx
+*.jks
+*private_key*.pem
+private_key.pem
+secrets/
+**/secrets/
+
 # Java / Maven / Gradle build output
 target/
 build/
