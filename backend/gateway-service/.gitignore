@@ -31,3 +31,21 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Environment files and secrets
+.env
+.env.*
+!.env.example
+!.env.template
+
+# Java / Maven / Gradle build output
+target/
+build/
+.gradle/
+*.class
+
+# Logs and OS files
+*.log
+logs/
+.DS_Store
+Thumbs.db
