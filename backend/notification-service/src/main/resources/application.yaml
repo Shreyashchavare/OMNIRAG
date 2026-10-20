@@ -8,7 +8,7 @@ spring:
   datasource:
     url: ${NOTIFICATION_DB_URL:jdbc:postgresql://localhost:5432/notification_db}
     username: ${NOTIFICATION_DB_USERNAME:postgres}
-    password: ${NOTIFICATION_DB_PASSWORD:Manager@123}
+    password: ${NOTIFICATION_DB_PASSWORD:change-me-local-notification-db-password}
     driver-class-name: org.postgresql.Driver
 
   jpa:

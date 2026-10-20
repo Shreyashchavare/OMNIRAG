@@ -1,0 +1,9 @@
+# GitGuardian configuration for OMRAGUL
+# See https://docs.gitguardian.com/ggshield-docs/reference/configuration
+
+version: 2
+
+secret:
+  ignored-paths:
+    # Test certificate fixtures and ephemeral mock keys used by unit/integration test suites
+    - '**/src/test/resources/certs/**'

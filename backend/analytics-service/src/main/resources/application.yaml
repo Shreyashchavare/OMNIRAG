@@ -8,7 +8,7 @@ spring:
   datasource:
     url: ${ANALYTICS_DB_URL:jdbc:postgresql://localhost:5432/analytics_db}
     username: ${ANALYTICS_DB_USERNAME:postgres}
-    password: ${ANALYTICS_DB_PASSWORD:Manager@123}
+    password: ${ANALYTICS_DB_PASSWORD:change-me-local-analytics-db-password}
     driver-class-name: org.postgresql.Driver
 
   jpa:
