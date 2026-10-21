@@ -198,8 +198,8 @@ public class DefaultProcessingOrchestrator implements ProcessingOrchestrator {
             }
 
             // STEP 5: FINALIZATION & STATUS SYNCHRONIZATION
-            completeJobSuccess(jobId, String.format("Successfully indexed %d chunks", indexedCount));
             knowledgeServiceClient.updateDocumentProcessingStatus(documentId, "COMPLETED");
+            completeJobSuccess(jobId, String.format("Successfully indexed %d chunks", indexedCount));
             log.info("[Job {}] Pipeline successfully finished for document {}", jobId, documentId);
 
         } catch (PermanentProcessingException e) {
@@ -218,6 +218,12 @@ public class DefaultProcessingOrchestrator implements ProcessingOrchestrator {
     public Optional<ProcessingJob> claimJobForExecution(UUID jobId) {
         try {
             Optional<ProcessingJob> optJob = repository.findById(jobId);
+            for (int i = 0; i < 5 && optJob.isEmpty(); i++) {
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException ignored) {}
+                optJob = repository.findById(jobId);
+            }
             if (optJob.isEmpty()) return Optional.empty();
 
             ProcessingJob job = optJob.get();

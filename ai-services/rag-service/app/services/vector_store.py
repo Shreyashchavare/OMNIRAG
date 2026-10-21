@@ -1,15 +1,37 @@
+import json
+import os
 import faiss
 import numpy as np
 
 
 class VectorStore:
 
-    def __init__(self, dimension: int):
+    def __init__(self, dimension: int, storage_dir: str = "faiss/indexes"):
         self.dimension = dimension
-
-        self.index = faiss.IndexFlatIP(dimension)
+        self.storage_dir = storage_dir
+        self.index_file = os.path.join(storage_dir, "index.faiss")
+        self.docs_file = os.path.join(storage_dir, "documents.json")
 
         self.documents = []
+        if os.path.exists(self.index_file) and os.path.exists(self.docs_file):
+            try:
+                self.index = faiss.read_index(self.index_file)
+                with open(self.docs_file, "r", encoding="utf-8") as f:
+                    self.documents = json.load(f)
+            except Exception:
+                self.index = faiss.IndexFlatIP(dimension)
+                self.documents = []
+        else:
+            self.index = faiss.IndexFlatIP(dimension)
+
+    def _save(self):
+        try:
+            os.makedirs(self.storage_dir, exist_ok=True)
+            faiss.write_index(self.index, self.index_file)
+            with open(self.docs_file, "w", encoding="utf-8") as f:
+                json.dump(self.documents, f, ensure_ascii=False)
+        except Exception:
+            pass
 
     def add(
         self,
@@ -26,6 +48,7 @@ class VectorStore:
         self.index.add(vectors)
 
         self.documents.extend(documents)
+        self._save()
 
     def search(
         self,

@@ -208,6 +208,44 @@ class GatewayRouteControllerTest {
     }
 
     @Test
+    @DisplayName("Protected route /api/v1/rag/search proxies to rag-service with valid JWT")
+    void testRagRouteWithValidToken() throws Exception {
+        UUID userId = UUID.randomUUID();
+        String validToken = TestJwtFactory.generateValidToken(userId, List.of("ROLE_USER"));
+
+        mockMvc.perform(get("/api/v1/rag/search")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + validToken))
+                .andExpect(status().isOk());
+
+        verify(reverseProxyService).forward(
+                eq("rag-service"),
+                eq("http://localhost:8002"),
+                eq("/api/v1/rag/search"),
+                any(),
+                any()
+        );
+    }
+
+    @Test
+    @DisplayName("Protected route /api/v1/agent/chat proxies to agent-service with valid JWT")
+    void testAgentRouteWithValidToken() throws Exception {
+        UUID userId = UUID.randomUUID();
+        String validToken = TestJwtFactory.generateValidToken(userId, List.of("ROLE_USER"));
+
+        mockMvc.perform(get("/api/v1/agent/chat")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + validToken))
+                .andExpect(status().isOk());
+
+        verify(reverseProxyService).forward(
+                eq("agent-service"),
+                eq("http://localhost:8004"),
+                eq("/api/v1/agent/chat"),
+                any(),
+                any()
+        );
+    }
+
+    @Test
     @DisplayName("CORS preflight request receives appropriate headers")
     void testCorsPreflight() throws Exception {
         mockMvc.perform(options("/api/v1/auth/login")

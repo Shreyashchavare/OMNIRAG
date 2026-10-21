@@ -95,8 +95,19 @@ public class ProcessingJobServiceImpl implements ProcessingJobService {
         ProcessingJob saved = repository.save(job);
         log.info("Created processing job: {} for document: {}", saved.getId(), saved.getDocumentId());
 
-        // 4. Asynchronous Execution Dispatch
-        orchestrator.submitJob(saved.getId());
+        // 4. Asynchronous Execution Dispatch after transaction commit
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            orchestrator.submitJob(saved.getId());
+                        }
+                    }
+            );
+        } else {
+            orchestrator.submitJob(saved.getId());
+        }
 
         return ProcessingJobResponse.fromEntity(saved);
     }

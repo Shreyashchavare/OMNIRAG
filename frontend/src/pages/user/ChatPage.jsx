@@ -4,6 +4,7 @@ import {
   Info, RefreshCw,
 } from 'lucide-react';
 import { documentApi } from '../../api/services/documentApi';
+import { ragApi } from '../../api/services/ragApi';
 import { documents as fallbackDocs, initChatMessages } from '../../data/mockData';
 
 const AI_TEMPLATES = [
@@ -86,7 +87,7 @@ export default function ChatPage() {
     };
   }, []);
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!input.trim()) return;
 
     const userText = input.trim();
@@ -100,8 +101,41 @@ export default function ChatPage() {
     setInput('');
     setIsTyping(true);
 
-    setTimeout(() => {
-      setIsTyping(false);
+    try {
+      const [ragResults, agentResp] = await Promise.all([
+        ragApi.search(userText, 3).catch(() => null),
+        ragApi.chat(userText).catch(() => null),
+      ]);
+
+      let content = '';
+      let citations = [];
+
+      if (agentResp && agentResp.response) {
+        content = agentResp.response;
+      } else if (ragResults && ragResults.results && ragResults.results.length > 0) {
+        content = ragResults.results[0].document?.text || 'Found relevant context in indexed knowledge base.';
+      } else {
+        const template = getNextResponse();
+        content = template.content;
+      }
+
+      if (ragResults && ragResults.results && ragResults.results.length > 0) {
+        citations = ragResults.results.map((r, idx) => ({
+          doc: r.document?.document_id ? `doc-${r.document.document_id.substring(0, 8)}` : `Chunk #${idx + 1}`,
+          page: (r.document?.chunk_index ?? idx) + 1,
+        }));
+      }
+
+      setMessages((p) => [
+        ...p,
+        {
+          role: 'assistant',
+          content,
+          citations: citations.length > 0 ? citations : undefined,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
+    } catch {
       const template = getNextResponse();
       setMessages((p) => [
         ...p,
@@ -111,7 +145,9 @@ export default function ChatPage() {
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
-    }, 1200);
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   return (

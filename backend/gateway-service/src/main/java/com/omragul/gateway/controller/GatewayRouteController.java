@@ -118,4 +118,24 @@ public class GatewayRouteController {
         String targetUrl = gatewayProperties.getServices().getNotification().getUrl();
         reverseProxyService.forward("notification-service", targetUrl, request.getRequestURI(), request, response);
     }
+
+    /**
+     * Routes to RAG Service:
+     * - Vector search, embeddings, indexing: /api/v1/rag/**
+     */
+    @RequestMapping(value = "/api/v1/rag/**")
+    public void routeRag(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        String targetUrl = gatewayProperties.getServices().getRag().getUrl();
+        reverseProxyService.forward("rag-service", targetUrl, request.getRequestURI(), request, response);
+    }
+
+    /**
+     * Routes to Agent Service:
+     * - Chat orchestration & LLM reasoning: /api/v1/agent/**
+     */
+    @RequestMapping(value = "/api/v1/agent/**")
+    public void routeAgent(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        String targetUrl = gatewayProperties.getServices().getAgent().getUrl();
+        reverseProxyService.forward("agent-service", targetUrl, request.getRequestURI(), request, response);
+    }
 }

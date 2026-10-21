@@ -19,6 +19,10 @@ gateway:
       url: http://localhost:8084
     notification:
       url: http://localhost:8085
+    rag:
+      url: http://localhost:8002
+    agent:
+      url: http://localhost:8004
 
   http:
     connect-timeout-ms: 1000
