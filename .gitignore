@@ -201,3 +201,6 @@ reports/
 # Windows
 ############################
 Desktop.ini
+
+# Downloaded test datasets
+/datasets/

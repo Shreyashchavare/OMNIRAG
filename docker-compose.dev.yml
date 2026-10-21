@@ -29,6 +29,8 @@ services:
       PROCESSING_SERVICE_URL: http://processing-service:8080
       ANALYTICS_SERVICE_URL: http://analytics-service:8080
       NOTIFICATION_SERVICE_URL: http://notification-service:8080
+      RAG_SERVICE_URL: http://rag-service:8000
+      AGENT_SERVICE_URL: http://agent-service:8000
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
     depends_on:
       identity-service:

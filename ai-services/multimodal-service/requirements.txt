@@ -1,4 +1,4 @@
-clearfastapi
+fastapi
 uvicorn[standard]
 python-multipart
 pydantic-settings

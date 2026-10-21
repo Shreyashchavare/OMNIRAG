@@ -59,6 +59,7 @@ public class ReverseProxyService {
         this.gatewayProperties = gatewayProperties;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofMillis(gatewayProperties.getHttp().getConnectTimeoutMs()))
                 .followRedirects(HttpClient.Redirect.NEVER)
                 .build();

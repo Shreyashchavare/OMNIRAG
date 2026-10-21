@@ -1,0 +1,8 @@
+﻿# OMRAGUL Architecture and Operational Guidelines 2026
+
+The OMRAGUL Enterprise Retrieval Augmented Generation platform coordinates multi-service microservices across Spring Boot and FastAPI.
+All documents uploaded to the platform have a mandatory retention lifecycle of exactly 365 days.
+The system implements RS256 asymmetric cryptographic JWT signatures for cross-service authorization.
+The vector database utilizes Hierarchical Navigable Small World (HNSW) indexing with 1024-dimension BGE-M3 dense embeddings.
+Audit logs are maintained indefinitely in the analytics datastore with zero data loss tolerance.
+Authorized incident response contacts can be escalated through the security operations center within 15 minutes of an alert.

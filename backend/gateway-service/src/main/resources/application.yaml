@@ -19,6 +19,10 @@ gateway:
       url: ${ANALYTICS_SERVICE_URL:http://analytics-service:8080}
     notification:
       url: ${NOTIFICATION_SERVICE_URL:http://notification-service:8080}
+    rag:
+      url: ${RAG_SERVICE_URL:http://rag-service:8000}
+    agent:
+      url: ${AGENT_SERVICE_URL:http://agent-service:8000}
 
   http:
     connect-timeout-ms: ${GATEWAY_CONNECT_TIMEOUT_MS:5000}

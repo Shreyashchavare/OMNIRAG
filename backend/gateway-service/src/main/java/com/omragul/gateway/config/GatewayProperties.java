@@ -24,6 +24,8 @@ public class GatewayProperties {
         private ServiceEndpoint processing = new ServiceEndpoint("http://processing-service:8080");
         private ServiceEndpoint analytics = new ServiceEndpoint("http://analytics-service:8080");
         private ServiceEndpoint notification = new ServiceEndpoint("http://notification-service:8080");
+        private ServiceEndpoint rag = new ServiceEndpoint("http://rag-service:8000");
+        private ServiceEndpoint agent = new ServiceEndpoint("http://agent-service:8000");
     }
 
     @Getter
