@@ -219,7 +219,7 @@ public class AuthServiceImpl implements AuthService {
         // 6.Return both new tokens
         return new TokenResponseDto(
                 accessToken,
-                refreshToken,
+                newRefreshToken,
                 "Bearer",
                 jwtExpirationMinutes * 60L
         );

@@ -204,3 +204,6 @@ Desktop.ini
 
 # Downloaded test datasets
 /datasets/
+
+/scripts/
+/docs/

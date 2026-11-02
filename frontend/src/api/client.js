@@ -73,7 +73,8 @@ apiClient.interceptors.response.use(
           refreshToken,
         });
 
-        const { accessToken, refreshToken: newRefreshToken } = response.data;
+        const accessToken = response.data.accessToken || response.data.access_token;
+        const newRefreshToken = response.data.refreshToken || response.data.refresh_token;
 
         localStorage.setItem('omnirag_access_token', accessToken);
         if (newRefreshToken) {

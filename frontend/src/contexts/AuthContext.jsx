@@ -95,7 +95,9 @@ export function AuthProvider({ children }) {
         password: credentials.password,
       });
 
-      const { accessToken: token, refreshToken, user: userData } = data;
+      const token = data.accessToken || data.access_token;
+      const refreshToken = data.refreshToken || data.refresh_token;
+      const userData = data.user;
       const claims = parseJwt(token);
       const determinedRole = resolveRole(claims, userData, requestedRole);
 
