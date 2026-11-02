@@ -61,8 +61,17 @@ public class UserServiceImpl implements UserService {
                 .failedLoginAttempts(0)
                 .build();
 
-        UserProfile userProfile =
-                userProfileMapper.toEntity(profile);
+        UserProfile userProfile = (profile != null)
+                ? userProfileMapper.toEntity(profile)
+                : null;
+
+        if (userProfile == null) {
+            userProfile = new UserProfile();
+        }
+
+        if (userProfile.getFirstName() == null || userProfile.getFirstName().isBlank()) {
+            userProfile.setFirstName(username);
+        }
 
         userProfile.setUser(user);
 
