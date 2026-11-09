@@ -1,3 +1,6 @@
+server:
+  port: ${SERVER_PORT:${PORT:8080}}
+
 spring:
   jackson:
     property-naming-strategy: SNAKE_CASE
@@ -6,9 +9,9 @@ spring:
     name: identity-service
 
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/identity_db}
-    username: ${DB_USERNAME:${SPRING_DATASOURCE_USERNAME:postgres}}
-    password: ${DB_PASSWORD:${SPRING_DATASOURCE_PASSWORD:}}
+    url: ${IDENTITY_DATASOURCE_URL:${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/identity_db}}
+    username: ${SPRING_DATASOURCE_USERNAME:${DB_USERNAME:postgres}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${DB_PASSWORD:}}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -25,18 +28,16 @@ spring:
 
 identity:
   otp:
-    expiration-minutes: 5
+    expiration-minutes: ${IDENTITY_OTP_EXPIRATION_MINUTES:5}
 
   refresh-token:
-    expiration-days: 30
+    expiration-days: ${IDENTITY_REFRESH_TOKEN_EXPIRATION_DAYS:30}
 
   jwt:
-    private-key: classpath:certs/private_key.pem
-    public-key: classpath:certs/public_key.pem
-    expiration-minutes: 15
-    issuer: http://localhost:8080
+    private-key: ${IDENTITY_JWT_PRIVATE_KEY_PATH:classpath:certs/private_key.pem}
+    public-key: ${IDENTITY_JWT_PUBLIC_KEY_PATH:classpath:certs/public_key.pem}
+    expiration-minutes: ${IDENTITY_JWT_EXPIRATION_MINUTES:15}
+    issuer: ${IDENTITY_JWT_ISSUER:http://localhost:8080}
 
   security:
-    max-failed-login-attempts: 5
-
-
+    max-failed-login-attempts: ${IDENTITY_MAX_FAILED_LOGIN_ATTEMPTS:5}

@@ -2,20 +2,26 @@ package com.omragul.identity.service.security;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
 
-@Service
+@Service("userAuthorizationService")
 @RequiredArgsConstructor
-public class UserAuthorizationServiceImpl implements UserAuthorizationService{
+public class UserAuthorizationServiceImpl implements UserAuthorizationService {
 
+    @SuppressWarnings("unused")
     private final RbacAuthorizationService rbacAuthorizationService;
 
+    @Override
     public boolean canAccessUser(
             UUID requestedUserId,
             Authentication authentication
     ) {
+        if (authentication == null || requestedUserId == null) {
+            return false;
+        }
 
         // ADMIN can access any user's resource
         boolean isAdmin = authentication.getAuthorities()
@@ -29,9 +35,23 @@ public class UserAuthorizationServiceImpl implements UserAuthorizationService{
         }
 
         // USER can access only their own resource
-        UUID authenticatedUserId =
-                (UUID) authentication.getPrincipal();
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof UUID authenticatedUserId) {
+            return authenticatedUserId.equals(requestedUserId);
+        } else if (principal instanceof String principalString) {
+            try {
+                return UUID.fromString(principalString).equals(requestedUserId);
+            } catch (IllegalArgumentException e) {
+                return false;
+            }
+        } else if (principal instanceof UserDetails userDetails) {
+            try {
+                return UUID.fromString(userDetails.getUsername()).equals(requestedUserId);
+            } catch (IllegalArgumentException e) {
+                return false;
+            }
+        }
 
-        return authenticatedUserId.equals(requestedUserId);
+        return false;
     }
 }

@@ -112,7 +112,10 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
-    @PreAuthorize("hasAuthority('USER_PROFILE_READ')")
+    @PreAuthorize("""
+        hasAuthority('USER_PROFILE_READ') and
+        @userAuthorizationService.canAccessUser(#userId, authentication)
+    """)
     @GetMapping("/{userId}/profile")
     public ResponseEntity<UserProfileResponseDto> getProfile(
             @PathVariable("userId") UUID userId
@@ -123,11 +126,10 @@ public class UserController {
         );
     }
 
-//    @PreAuthorize("""
-//        hasAuthority('USER_PROFILE_UPDATE') &&
-//        @userAuthorizationService.canAccessUser(#userId, authentication)
-//    """)
-    @PreAuthorize("hasAuthority('USER_PROFILE_UPDATE')")
+    @PreAuthorize("""
+        hasAuthority('USER_PROFILE_UPDATE') and
+        @userAuthorizationService.canAccessUser(#userId, authentication)
+    """)
     @PutMapping("/{userId}/profile")
     public ResponseEntity<UserProfileResponseDto> updateProfile(
             @PathVariable("userId") UUID userId,
