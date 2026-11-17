@@ -6,9 +6,9 @@ spring:
     property-naming-strategy: SNAKE_CASE
 
   datasource:
-    url: ${PROCESSING_DB_URL:jdbc:postgresql://localhost:5432/processing_db}
-    username: ${PROCESSING_DB_USERNAME:postgres}
-    password: ${PROCESSING_DB_PASSWORD:change-me-local-processing-db-password}
+    url: ${PROCESSING_DB_URL}
+    username: ${PROCESSING_DB_USERNAME}
+    password: ${PROCESSING_DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -25,7 +25,7 @@ spring:
     baseline-on-migrate: true
 
 server:
-  port: ${PROCESSING_SERVER_PORT:8080}
+  port: ${PROCESSING_SERVER_PORT:${PROCESSING_PORT}}
 
 springdoc:
   api-docs:
@@ -35,20 +35,20 @@ springdoc:
 
 processing:
   knowledge-service:
-    url: ${KNOWLEDGE_SERVICE_URL:http://localhost:8082}
+    url: ${KNOWLEDGE_SERVICE_URL}
   multimodal-service:
-    url: ${MULTIMODAL_SERVICE_URL:http://localhost:8004}
+    url: ${MULTIMODAL_SERVICE_URL}
   embedding-service:
-    url: ${EMBEDDING_SERVICE_URL:http://localhost:8003}
+    url: ${EMBEDDING_SERVICE_URL}
   rag-service:
-    url: ${RAG_SERVICE_URL:http://localhost:8002}
+    url: ${RAG_SERVICE_URL}
 
   orchestration:
-    max-attempts: ${PROCESSING_MAX_ATTEMPTS:3}
-    connect-timeout-ms: ${PROCESSING_CONNECT_TIMEOUT_MS:5000}
-    read-timeout-ms: ${PROCESSING_READ_TIMEOUT_MS:30000}
+    max-attempts: ${PROCESSING_MAX_ATTEMPTS}
+    connect-timeout-ms: ${PROCESSING_CONNECT_TIMEOUT_MS}
+    read-timeout-ms: ${PROCESSING_READ_TIMEOUT_MS}
 
   executor:
-    core-pool-size: ${PROCESSING_EXECUTOR_CORE_POOL_SIZE:4}
-    max-pool-size: ${PROCESSING_EXECUTOR_MAX_POOL_SIZE:8}
-    queue-capacity: ${PROCESSING_EXECUTOR_QUEUE_CAPACITY:100}
+    core-pool-size: ${PROCESSING_EXECUTOR_CORE_POOL_SIZE}
+    max-pool-size: ${PROCESSING_EXECUTOR_MAX_POOL_SIZE}
+    queue-capacity: ${PROCESSING_EXECUTOR_QUEUE_CAPACITY}

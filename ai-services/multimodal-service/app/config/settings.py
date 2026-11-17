@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
 
     HOST: str = "0.0.0.0"
-    PORT: int = 8004
+    PORT: int = 8003
 
     WHISPER_MODEL: str 
     WHISPER_DEVICE: str

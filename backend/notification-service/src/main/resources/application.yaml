@@ -6,9 +6,9 @@ spring:
     name: notification-service
 
   datasource:
-    url: ${NOTIFICATION_DB_URL:jdbc:postgresql://localhost:5432/notification_db}
-    username: ${NOTIFICATION_DB_USERNAME:postgres}
-    password: ${NOTIFICATION_DB_PASSWORD:change-me-local-notification-db-password}
+    url: ${NOTIFICATION_DB_URL}
+    username: ${NOTIFICATION_DB_USERNAME}
+    password: ${NOTIFICATION_DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -24,12 +24,12 @@ spring:
     locations: classpath:db/migration
 
 server:
-  port: ${NOTIFICATION_SERVER_PORT:8080}
+  port: ${NOTIFICATION_SERVER_PORT}
 
 notification:
   jwt:
-    public-key: ${NOTIFICATION_JWT_PUBLIC_KEY_PATH:classpath:certs/public_key.pem}
-    issuer: ${NOTIFICATION_JWT_ISSUER:http://localhost:8080}
+    public-key: ${NOTIFICATION_JWT_PUBLIC_KEY_PATH}
+    issuer: ${NOTIFICATION_JWT_ISSUER}
 
   pagination:
     default-page-size: 20

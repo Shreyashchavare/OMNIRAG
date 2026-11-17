@@ -1,12 +1,15 @@
 
+server:
+  port: ${SERVER_PORT}
+
 spring:
   application:
     name: knowledge-service
 
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/knowledge_db}
-    username: ${SPRING_DATASOURCE_USERNAME}
-    password: ${SPRING_DATASOURCE_PASSWORD}
+    url: ${KNOWLEDGE_DB_URL:${KNOWLEDGE_DATASOURCE_URL:${SPRING_DATASOURCE_URL}}}
+    username: ${KNOWLEDGE_DB_USERNAME:${SPRING_DATASOURCE_USERNAME}}
+    password: ${KNOWLEDGE_DB_PASSWORD:${SPRING_DATASOURCE_PASSWORD}}
 
   jpa:
     hibernate:
