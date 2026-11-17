@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -26,25 +27,32 @@ public class RbacAuthorizationServiceImpl
     @Transactional(readOnly = true)
     public Set<String> getUserPermissions(UUID userId) {
 
-        Set<String> permissions = new HashSet<>();
+        if (userId == null) {
+            return Collections.emptySet();
+        }
 
-        // 1. Get all roles assigned to the user
+        // 1. Get all roles assigned to the user with eager fetch of role
         List<UserRole> userRoles =
-                userRoleRepository.findByUserUserId(userId);
+                userRoleRepository.findByUserUserIdWithRole(userId);
 
-        // 2. Get permissions for every role
-        for (UserRole userRole : userRoles) {
+        if (userRoles.isEmpty()) {
+            return Collections.emptySet();
+        }
 
-            UUID roleId =
-                    userRole.getRole().getRoleId();
+        List<UUID> roleIds = userRoles.stream()
+                .map(ur -> ur.getRole().getRoleId())
+                .distinct()
+                .toList();
 
-            List<RolePermission> rolePermissions =
-                    rolePermissionRepository
-                            .findByRoleRoleId(roleId);
+        // 2. Fetch all role permissions in a single batch query with joined permission entity
+        List<RolePermission> rolePermissions =
+                rolePermissionRepository.findByRoleRoleIdInWithPermissions(roleIds);
 
-            // 3. Convert PermissionType to String
-            for (RolePermission rolePermission : rolePermissions) {
-
+        // 3. Convert PermissionType to String
+        Set<String> permissions = new HashSet<>();
+        for (RolePermission rolePermission : rolePermissions) {
+            if (rolePermission.getPermission() != null
+                    && rolePermission.getPermission().getPermissionName() != null) {
                 permissions.add(
                         rolePermission
                                 .getPermission()
@@ -61,8 +69,12 @@ public class RbacAuthorizationServiceImpl
     @Transactional(readOnly = true)
     public Set<String> getUserRoles(UUID userId) {
 
+        if (userId == null) {
+            return Collections.emptySet();
+        }
+
         return userRoleRepository
-                .findByUserUserId(userId)
+                .findByUserUserIdWithRole(userId)
                 .stream()
                 .map(userRole ->
                         userRole.getRole()

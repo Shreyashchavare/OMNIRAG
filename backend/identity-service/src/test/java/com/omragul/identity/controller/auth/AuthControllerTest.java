@@ -8,6 +8,7 @@ import com.omragul.identity.dto.response.auth.LoginResponseDto;
 import com.omragul.identity.dto.response.auth.SignupResponseDto;
 import com.omragul.identity.dto.response.auth.TokenResponseDto;
 import com.omragul.identity.dto.response.user.UserResponseDto;
+import com.omragul.identity.exception.InvalidCredentialsException;
 import com.omragul.identity.security.JwtAuthenticationEntryPoint;
 import com.omragul.identity.security.JwtAuthenticationFilter;
 import com.omragul.identity.service.auth.AuthService;
@@ -140,13 +141,43 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/v1/auth/logout: returns 401 Unauthorized for unauthenticated request")
-    void shouldReturn401OnUnauthenticatedLogout() throws Exception {
+    @DisplayName("POST /api/v1/auth/logout: returns 204 No Content even when unauthenticated (access token expired)")
+    void shouldReturn204OnUnauthenticatedLogout() throws Exception {
         RefreshTokenRequestDto request = new RefreshTokenRequestDto("token_to_logout");
 
         mockMvc.perform(post("/api/v1/auth/logout")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isNoContent());
+
+        verify(authService).logout("token_to_logout");
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/auth/login: returns 401 Unauthorized with generic message on invalid credentials")
+    void shouldReturn401OnInvalidCredentials() throws Exception {
+        LoginRequestDto request = new LoginRequestDto("unknown@omragul.com", "WrongPassword");
+        when(authService.login(any())).thenThrow(new InvalidCredentialsException("Invalid identifier or password"));
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("INVALID_CREDENTIALS"))
+                .andExpect(jsonPath("$.message").value("Invalid identifier or password"));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/auth/login: returns generic 500 without leaking exception message on unexpected error")
+    void shouldReturnGeneric500WithoutLeakingDetails() throws Exception {
+        LoginRequestDto request = new LoginRequestDto("test@omragul.com", "Password123!");
+        when(authService.login(any())).thenThrow(new RuntimeException("PSQLException: table users does not exist"));
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.error").value("INTERNAL_SERVER_ERROR"))
+                .andExpect(jsonPath("$.message").value("An unexpected error occurred. Please try again later."));
     }
 }

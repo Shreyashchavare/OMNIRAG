@@ -1,6 +1,7 @@
 package com.omragul.identity.controller.rbac;
 
 import com.omragul.identity.dto.response.rbac.RoleResponseDto;
+import com.omragul.identity.security.SecurityUtils;
 import com.omragul.identity.service.rbac.UserRoleService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -27,7 +28,7 @@ public class UserRoleController {
     ) {
 
         UUID assignedBy =
-                (UUID) authentication.getPrincipal();
+                SecurityUtils.extractUserId(authentication);
 
         userRoleService.assignRole(
                 userId,

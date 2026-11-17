@@ -39,6 +39,14 @@ build/
 .env.*
 !.env.example
 !.env.template
+*.key
+*.p12
+*.pfx
+*.jks
+*private_key*.pem
+private_key.pem
+secrets/
+**/secrets/
 
 # Java / Maven / Gradle build output
 .gradle/

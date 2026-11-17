@@ -13,6 +13,8 @@ import com.omragul.identity.entity.user.User;
 import com.omragul.identity.enums.RoleType;
 import com.omragul.identity.enums.UserStatus;
 import com.omragul.identity.exception.IdentityException;
+import com.omragul.identity.exception.InvalidCredentialsException;
+import com.omragul.identity.exception.ResourceNotFoundException;
 import com.omragul.identity.exception.UserAlreadyExistsException;
 import com.omragul.identity.exception.UserLockedException;
 import com.omragul.identity.mapper.UserMapper;
@@ -110,17 +112,20 @@ public class AuthServiceImpl implements AuthService {
 
         User user;
 
-        // 1. Find user by username or email
-        if (request.getIdentifier().contains("@")) {
-
-            user = userService.getUserEntityByEmail(
-                    request.getIdentifier()
-            );
-
-        } else {
-
-            user = userService.getUserEntityByUsername(
-                    request.getIdentifier()
+        // 1. Find user by username or email. Catch ResourceNotFoundException to prevent account enumeration.
+        try {
+            if (request.getIdentifier().contains("@")) {
+                user = userService.getUserEntityByEmail(
+                        request.getIdentifier()
+                );
+            } else {
+                user = userService.getUserEntityByUsername(
+                        request.getIdentifier()
+                );
+            }
+        } catch (ResourceNotFoundException e) {
+            throw new InvalidCredentialsException(
+                    "Invalid identifier or password"
             );
         }
 
@@ -134,7 +139,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         // 3. Check account status
-        if (user.getStatus() != UserStatus.ACTIVE) {
+        if (user.getStatus() != UserStatus.ACTIVE || Boolean.TRUE.equals(user.getIsDeleted())) {
 
             throw new IdentityException(
                     "User account is not active"
@@ -153,8 +158,8 @@ public class AuthServiceImpl implements AuthService {
                     user.getUserId()
             );
 
-            throw new IdentityException(
-                    "Invalid username/email or password"
+            throw new InvalidCredentialsException(
+                    "Invalid identifier or password"
             );
         }
 
@@ -195,19 +200,39 @@ public class AuthServiceImpl implements AuthService {
     public TokenResponseDto refreshAccessToken(String refreshToken) {
 
         // <----Refresh token rotation--->//
-        // 1.Validate the refresh token
+        // 1. Validate the refresh token
         RefreshToken storedRefreshToken = refreshTokenService.validateToken(refreshToken);
 
-        // 2.Get the user associated with the refresh token
+        // 2. Get the user associated with the refresh token
         User user = storedRefreshToken.getUser();
 
-        // 3.Generate new JWT access token
+        // 3. Validate user account state before issuing new access token
+        if (user == null || Boolean.TRUE.equals(user.getIsDeleted())) {
+            throw new ResourceNotFoundException(
+                    "User account not found or deleted"
+            );
+        }
+
+        if (Boolean.TRUE.equals(user.getAccountLocked())
+                || user.getStatus() == UserStatus.LOCKED) {
+            throw new UserLockedException(
+                    "User account is locked"
+            );
+        }
+
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new IdentityException(
+                    "User account is not active"
+            );
+        }
+
+        // 4. Generate new JWT access token
         String accessToken = jwtService.generateAccessToken(user);
 
-        // 4.Revoke the old refresh token
+        // 5. Revoke the old refresh token
         refreshTokenService.revokeToken(refreshToken);
 
-        // 5.Generate a new refresh token
+        // 6. Generate a new refresh token
         String newRefreshToken =
                 refreshTokenService.createToken(
                         user.getUserId(),
@@ -216,7 +241,7 @@ public class AuthServiceImpl implements AuthService {
                         storedRefreshToken.getUserAgent()
                 );
 
-        // 6.Return both new tokens
+        // 7. Return both new tokens
         return new TokenResponseDto(
                 accessToken,
                 newRefreshToken,
@@ -228,8 +253,11 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public void logout(String refreshToken) {
-
-        refreshTokenService.revokeToken(refreshToken);
+        try {
+            refreshTokenService.revokeToken(refreshToken);
+        } catch (ResourceNotFoundException e) {
+            // Token not found, expired, or already revoked: do not leak account information (idempotent logout)
+        }
     }
 
     @Override

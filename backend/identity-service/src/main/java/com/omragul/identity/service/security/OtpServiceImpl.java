@@ -12,11 +12,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 @RequiredArgsConstructor
@@ -25,6 +25,8 @@ public class OtpServiceImpl implements OtpService {
     private final OtpRepository otpRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+
+    private final SecureRandom secureRandom = new SecureRandom();
 
     @Value("${identity.otp.expiration-minutes}")
     private long otpExpirationMinutes;
@@ -76,11 +78,6 @@ public class OtpServiceImpl implements OtpService {
                 .build();
 
         otpRepository.save(otp);
-
-        // For now, we don't have an email/SMS service.
-        // The generated OTP will eventually be sent through
-        // NotificationService.
-        System.out.println("Generated OTP: " + otpCode);
     }
 
     @Override
@@ -156,8 +153,7 @@ public class OtpServiceImpl implements OtpService {
 
         return String.format(
                 "%06d",
-                ThreadLocalRandom.current()
-                        .nextInt(0, 1_000_000)
+                secureRandom.nextInt(1_000_000)
         );
     }
 }

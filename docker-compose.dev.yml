@@ -48,14 +48,34 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
+      SERVER_PORT: 8080
+
       SPRING_DATASOURCE_URL: ${IDENTITY_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/identity_db}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       DB_USERNAME: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
-    networks: [omragul-network]
+
+      IDENTITY_OTP_EXPIRATION_MINUTES: 5
+      IDENTITY_REFRESH_TOKEN_EXPIRATION_DAYS: 30
+
+      IDENTITY_JWT_PRIVATE_KEY_PATH: file:/secrets/private_key.pem
+      IDENTITY_JWT_PUBLIC_KEY_PATH: classpath:certs/dev_public_key.pem
+      IDENTITY_JWT_EXPIRATION_MINUTES: 15
+      IDENTITY_JWT_ISSUER: ${IDENTITY_JWT_ISSUER:-http://localhost:8080}
+
+      IDENTITY_MAX_FAILED_LOGIN_ATTEMPTS: 5
+    volumes:
+      - ${IDENTITY_DEV_SECRETS_PATH:-./secrets}:/secrets:ro
+    networks: [ omragul-network ]
 
   knowledge-service:
     build:

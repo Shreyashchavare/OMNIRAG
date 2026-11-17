@@ -74,6 +74,25 @@ public class GlobalExceptionHandler {
                 .body(response);
     }
 
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ErrorResponseDto> handleInvalidCredentials(
+            InvalidCredentialsException exception,
+            HttpServletRequest request
+    ) {
+        log.warn("Authentication failed at {}: {}", request.getRequestURI(), exception.getMessage());
+        ErrorResponseDto response = ErrorResponseDto.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.UNAUTHORIZED.value())
+                .error("INVALID_CREDENTIALS")
+                .message(exception.getMessage())
+                .path(request.getRequestURI())
+                .build();
+
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(response);
+    }
+
     @ExceptionHandler(IdentityException.class)
     public ResponseEntity<ErrorResponseDto> handleIdentityException(
             IdentityException exception,
@@ -165,7 +184,7 @@ public class GlobalExceptionHandler {
                 .timestamp(Instant.now())
                 .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
                 .error("INTERNAL_SERVER_ERROR")
-                .message("An unexpected error occurred: " + exception.getMessage())
+                .message("An unexpected error occurred. Please try again later.")
                 .path(request.getRequestURI())
                 .build();
 

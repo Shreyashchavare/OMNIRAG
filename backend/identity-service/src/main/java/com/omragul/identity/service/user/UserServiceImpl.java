@@ -19,6 +19,7 @@ import com.omragul.identity.repository.RoleRepository;
 import com.omragul.identity.repository.UserRepository;
 import com.omragul.identity.repository.UserRoleRepository;
 import com.omragul.identity.service.security.PasswordService;
+import com.omragul.identity.service.security.RefreshTokenService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,7 @@ public class UserServiceImpl implements UserService {
     private final UserProfileMapper userProfileMapper;
     private final RoleRepository roleRepository;
     private final UserRoleRepository userRoleRepository;
+    private final RefreshTokenService refreshTokenService;
 
     private final PasswordService passwordService;
 
@@ -217,6 +219,33 @@ public class UserServiceImpl implements UserService {
                                 "User not found with id: " + userId
                         )
                 );
+
+        // Check username collision against other users
+        if (request.getUsername() != null && !request.getUsername().isBlank()
+                && !request.getUsername().equals(user.getUsername())) {
+            userRepository.findByUsernameAndIsDeletedFalse(request.getUsername())
+                    .ifPresent(existing -> {
+                        if (!existing.getUserId().equals(userId)) {
+                            throw new UserAlreadyExistsException(
+                                    "Username already exists: " + request.getUsername()
+                            );
+                        }
+                    });
+        }
+
+        // Check email collision against other users
+        if (request.getEmail() != null && !request.getEmail().isBlank()
+                && !request.getEmail().equalsIgnoreCase(user.getEmail())) {
+            userRepository.findByEmailAndIsDeletedFalse(request.getEmail())
+                    .ifPresent(existing -> {
+                        if (!existing.getUserId().equals(userId)) {
+                            throw new UserAlreadyExistsException(
+                                    "Email already exists: " + request.getEmail()
+                            );
+                        }
+                    });
+        }
+
         userMapper.updateUser(request, user);
 
         User updatedUser = userRepository.save(user);
@@ -240,48 +269,6 @@ public class UserServiceImpl implements UserService {
                 .existsByEmailAndIsDeletedFalse(email);
     }
 
-//    @Override
-//    @Transactional
-//    public void recordFailedLoginAttempt(UUID userId) {
-//
-//        User user = userRepository
-//                .findByUserIdAndIsDeletedFalse(userId)
-//                .orElseThrow(() ->
-//                        new ResourceNotFoundException(
-//                                "User not found with id: " + userId
-//                        )
-//                );
-//
-//        int failedAttempts = user.getFailedLoginAttempts() + 1;
-//
-//        user.setFailedLoginAttempts(failedAttempts);
-//
-//        if (failedAttempts >= maxFailedLoginAttempts) {
-//            user.setAccountLocked(true);
-//            user.setStatus(UserStatus.LOCKED);
-//        }
-//
-//        userRepository.save(user);
-//    }
-//
-//    @Override
-//    @Transactional
-//    public void recordSuccessfulLogin(UUID userId) {
-//
-//        User user = userRepository
-//                .findByUserIdAndIsDeletedFalse(userId)
-//                .orElseThrow(() ->
-//                        new ResourceNotFoundException(
-//                                "User not found with id: " + userId
-//                        )
-//                );
-//
-//        user.setFailedLoginAttempts(0);
-//        user.setLastLoginAt(Instant.now());
-//
-//        userRepository.save(user);
-//    }
-
     @Override
     @Transactional
     public void deleteUser(UUID userId) {
@@ -298,6 +285,8 @@ public class UserServiceImpl implements UserService {
         user.setDeletedAt(Instant.now());
 
         userRepository.save(user);
+
+        refreshTokenService.revokeAllUserTokens(userId);
     }
 
     @Override
@@ -334,6 +323,8 @@ public class UserServiceImpl implements UserService {
         user.setStatus(UserStatus.LOCKED);
 
         userRepository.save(user);
+
+        refreshTokenService.revokeAllUserTokens(userId);
     }
 
     @Override

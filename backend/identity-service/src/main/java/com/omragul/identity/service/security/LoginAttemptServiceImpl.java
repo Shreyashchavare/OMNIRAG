@@ -34,7 +34,8 @@ public class LoginAttemptServiceImpl implements LoginAttemptService {
                         )
                 );
 
-        int failedAttempts = user.getFailedLoginAttempts() + 1;
+        int currentAttempts = user.getFailedLoginAttempts() != null ? user.getFailedLoginAttempts() : 0;
+        int failedAttempts = currentAttempts + 1;
 
         user.setFailedLoginAttempts(failedAttempts);
 

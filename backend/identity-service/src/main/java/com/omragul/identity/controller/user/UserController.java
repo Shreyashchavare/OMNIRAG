@@ -7,6 +7,7 @@ import com.omragul.identity.dto.response.user.UserProfileResponseDto;
 import com.omragul.identity.dto.response.user.UserResponseDto;
 import com.omragul.identity.service.user.UserProfileService;
 import com.omragul.identity.service.user.UserService;
+import com.omragul.identity.security.SecurityUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -33,7 +34,7 @@ public class UserController {
     ) {
 
         UUID adminUserId =
-                (UUID) authentication.getPrincipal();
+                SecurityUtils.extractUserId(authentication);
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
