@@ -14,6 +14,10 @@ RUN npm ci
 # Copy source code
 COPY . .
 
+# Build argument for API Gateway URL (consumed at build time by Vite)
+ARG VITE_API_GATEWAY_URL=http://localhost:8080
+ENV VITE_API_GATEWAY_URL=$VITE_API_GATEWAY_URL
+
 # Build production files
 RUN npm run build
 
