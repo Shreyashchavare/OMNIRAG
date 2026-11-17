@@ -16,7 +16,9 @@ import com.omragul.notification.util.TestJwtFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -36,8 +38,22 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest({NotificationController.class, InternalNotificationIngestionController.class})
-@Import({SecurityConfig.class, JwtAuthenticationFilter.class, JwtAuthenticationEntryPoint.class, JwtValidator.class, GlobalExceptionHandler.class})
+@Import({
+        SecurityConfig.class,
+        JwtAuthenticationFilter.class,
+        JwtAuthenticationEntryPoint.class,
+        NotificationSecurityTest.TestJwtConfig.class,
+        GlobalExceptionHandler.class
+})
 class NotificationSecurityTest {
+
+    @TestConfiguration
+    static class TestJwtConfig {
+        @Bean
+        public JwtValidator jwtValidator() {
+            return new JwtValidator(TestJwtFactory.getPublicKeyResource(), "http://localhost:8080");
+        }
+    }
 
     @Autowired
     private MockMvc mockMvc;

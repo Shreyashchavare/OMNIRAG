@@ -5,7 +5,6 @@ import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.io.ClassPathResource;
 
 import java.util.List;
 import java.util.UUID;
@@ -19,7 +18,7 @@ class JwtValidatorTest {
     @BeforeEach
     void setUp() {
         jwtValidator = new JwtValidator(
-                new ClassPathResource("certs/test_public_key.pem"),
+                TestJwtFactory.getPublicKeyResource(),
                 "http://localhost:8080"
         );
     }
