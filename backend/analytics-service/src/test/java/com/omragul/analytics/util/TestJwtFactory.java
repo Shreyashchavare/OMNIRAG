@@ -1,13 +1,15 @@
 package com.omragul.analytics.util;
 
 import io.jsonwebtoken.Jwts;
-import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
 
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.security.KeyFactory;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
-import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.PublicKey;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
@@ -16,12 +18,36 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Helper for generating test JWTs signed with the test RSA private key.
+ * Helper for generating test JWTs signed with a dynamic in-memory RSA keypair.
  * Must not be used in production code.
  */
 public class TestJwtFactory {
 
     private static final String ISSUER = "http://localhost:8080";
+    private static final KeyPair KEY_PAIR;
+
+    static {
+        try {
+            KeyPairGenerator keyPairGen = KeyPairGenerator.getInstance("RSA");
+            keyPairGen.initialize(2048);
+            KEY_PAIR = keyPairGen.generateKeyPair();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("Failed to initialize test RSA key pair", e);
+        }
+    }
+
+    public static PublicKey getPublicKey() {
+        return KEY_PAIR.getPublic();
+    }
+
+    public static PrivateKey getPrivateKey() {
+        return KEY_PAIR.getPrivate();
+    }
+
+    public static Resource getPublicKeyResource() {
+        String base64 = Base64.getEncoder().encodeToString(KEY_PAIR.getPublic().getEncoded());
+        return new ByteArrayResource(base64.getBytes(StandardCharsets.UTF_8));
+    }
 
     public static String generateAdminToken(UUID userId) {
         return generateToken(userId, List.of("ADMIN"), List.of("ANALYTICS_READ"));
@@ -36,7 +62,7 @@ public class TestJwtFactory {
     }
 
     private static String generateToken(UUID userId, List<String> roles, List<String> permissions) {
-        PrivateKey privateKey = loadTestPrivateKey();
+        PrivateKey privateKey = KEY_PAIR.getPrivate();
 
         Instant now = Instant.now();
         Instant expiry = now.plus(15, ChronoUnit.MINUTES);
@@ -50,25 +76,5 @@ public class TestJwtFactory {
                 .expiration(Date.from(expiry))
                 .signWith(privateKey, Jwts.SIG.RS256)
                 .compact();
-    }
-
-    private static PrivateKey loadTestPrivateKey() {
-        try {
-            ClassPathResource resource = new ClassPathResource("certs/test_private_key_pkcs8.pem");
-            try (InputStream inputStream = resource.getInputStream()) {
-                String key = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-                key = key
-                        .replace("-----BEGIN PRIVATE KEY-----", "")
-                        .replace("-----END PRIVATE KEY-----", "")
-                        .replaceAll("\\s+", "");
-
-                byte[] decodedKey = Base64.getDecoder().decode(key);
-                PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(decodedKey);
-                KeyFactory keyFactory = KeyFactory.getInstance("RSA");
-                return keyFactory.generatePrivate(keySpec);
-            }
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to load test RSA private key", e);
-        }
     }
 }

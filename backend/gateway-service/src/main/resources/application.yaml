@@ -1,5 +1,5 @@
 server:
-  port: ${SERVER_PORT:${GATEWAY_PORT:8080}}
+  port: ${SERVER_PORT:${GATEWAY_PORT}}
 
 spring:
   application:
@@ -10,27 +10,27 @@ spring:
 gateway:
   services:
     identity:
-      url: ${IDENTITY_SERVICE_URL:http://identity-service:8080}
+      url: ${IDENTITY_SERVICE_URL}
     knowledge:
-      url: ${KNOWLEDGE_SERVICE_URL:http://knowledge-service:8080}
+      url: ${KNOWLEDGE_SERVICE_URL}
     processing:
-      url: ${PROCESSING_SERVICE_URL:http://processing-service:8080}
+      url: ${PROCESSING_SERVICE_URL}
     analytics:
-      url: ${ANALYTICS_SERVICE_URL:http://analytics-service:8080}
+      url: ${ANALYTICS_SERVICE_URL}
     notification:
-      url: ${NOTIFICATION_SERVICE_URL:http://notification-service:8080}
+      url: ${NOTIFICATION_SERVICE_URL}
     rag:
-      url: ${RAG_SERVICE_URL:http://rag-service:8000}
+      url: ${RAG_SERVICE_URL}
     agent:
-      url: ${AGENT_SERVICE_URL:http://agent-service:8000}
+      url: ${AGENT_SERVICE_URL}
 
   http:
-    connect-timeout-ms: ${GATEWAY_CONNECT_TIMEOUT_MS:5000}
-    read-timeout-ms: ${GATEWAY_READ_TIMEOUT_MS:30000}
+    connect-timeout-ms: ${GATEWAY_CONNECT_TIMEOUT_MS}
+    read-timeout-ms: ${GATEWAY_READ_TIMEOUT_MS}
 
   cors:
-    allowed-origin: ${FRONTEND_ORIGIN:http://localhost:3000}
+    allowed-origin: ${FRONTEND_ORIGIN}
 
   jwt:
-    public-key: ${GATEWAY_JWT_PUBLIC_KEY_PATH:classpath:certs/public_key.pem}
-    issuer: ${GATEWAY_JWT_ISSUER:http://localhost:8080}
+    public-key: ${GATEWAY_JWT_PUBLIC_KEY_PATH}
+    issuer: ${GATEWAY_JWT_ISSUER}

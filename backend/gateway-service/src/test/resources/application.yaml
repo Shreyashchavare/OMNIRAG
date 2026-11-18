@@ -32,5 +32,5 @@ gateway:
     allowed-origin: http://localhost:3000
 
   jwt:
-    public-key: classpath:certs/test_public_key.pem
+    public-key: classpath:certs/dev_public_key.pem
     issuer: http://localhost:8080

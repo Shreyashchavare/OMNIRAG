@@ -117,9 +117,9 @@ If an active job (`QUEUED`, `VALIDATING`, `EXTRACTING`, `CHUNKING`, `EMBEDDING_I
 | Microservice | Container Port | Host Port | Verified Endpoints | Contract Schema |
 |---|---|---|---|---|
 | **Knowledge Service** | `8080` | `8082` | `GET /api/v1/documents/{id}`<br>`PATCH /api/v1/documents/{id}/processing-status/{status}` | [`DocumentResponse`](file:///e:/CAPSTONE%20CSE%20AI/OMRAGUL/OMRAGUL/backend/knowledge-service/src/main/java/com/omragul/knowledge/dto/DocumentResponse.java) |
-| **Multimodal Service** | `8004` | `8004` | `POST /api/v1/multimodal/pdf/extract`<br>`POST /api/v1/multimodal/ocr`<br>`POST /api/v1/multimodal/speech/transcribe`<br>`POST /api/v1/multimodal/chunk?text=...` | Multipart `file` input;<br>Returns JSON text/chunks |
-| **Embedding Service** | `8003` | `8003` | `POST /api/v1/embeddings/batch` | `{"texts": [...]}` → `{"embeddings": [[...]]}` |
-| **RAG Service** | `8002` | `8002` | `POST /api/v1/rag/index` | `{"chunks": [{"text": ..., "document_id": ...}]}` |
+| **Embedding Service** | `8000` | `8001` | `POST /api/v1/embeddings/batch` | `{"texts": [...]}` → `{"embeddings": [[...]]}` |
+| **RAG Service** | `8000` | `8002` | `POST /api/v1/rag/index` | `{"chunks": [{"text": ..., "document_id": ...}]}` |
+| **Multimodal Service** | `8000` | `8003` | `POST /api/v1/multimodal/pdf/extract`<br>`POST /api/v1/multimodal/ocr`<br>`POST /api/v1/multimodal/speech/transcribe`<br>`POST /api/v1/multimodal/chunk?text=...` | Multipart `file` input;<br>Returns JSON text/chunks |
 
 ---
 
@@ -137,12 +137,12 @@ If an active job (`QUEUED`, `VALIDATING`, `EXTRACTING`, `CHUNKING`, `EMBEDDING_I
 processing:
   knowledge-service:
     url: ${KNOWLEDGE_SERVICE_URL:http://localhost:8082}
-  multimodal-service:
-    url: ${MULTIMODAL_SERVICE_URL:http://localhost:8004}
   embedding-service:
-    url: ${EMBEDDING_SERVICE_URL:http://localhost:8003}
+    url: ${EMBEDDING_SERVICE_URL:http://localhost:8001}
   rag-service:
     url: ${RAG_SERVICE_URL:http://localhost:8002}
+  multimodal-service:
+    url: ${MULTIMODAL_SERVICE_URL:http://localhost:8003}
 
   orchestration:
     max-attempts: ${PROCESSING_MAX_ATTEMPTS:3}
@@ -200,8 +200,13 @@ The resulting artifact is located at:
 - **Dockerfile:** Multi-stage build provided (`maven:3.9.11-eclipse-temurin-21` -> `eclipse-temurin:21-jre`).
 - **Environment Status:** Docker Desktop daemon was not running during local verification (`open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified`).
 - **Execution with Docker:**
-  Once Docker Desktop is launched, build and run using:
-  ```powershell
-  docker build -t omragul/processing-service:latest backend/processing-service/
-  docker run -p 8083:8080 --env-file backend/processing-service/env.example omragul/processing-service:latest
-  ```
+  1. Copy `.env.example` to `.env`:
+     ```powershell
+     cp backend/processing-service/.env.example backend/processing-service/.env
+     ```
+  2. Fill in the required local environment variables in `.env` (never commit the actual `.env` file).
+  3. Once Docker Desktop is launched, build and run using the actual `.env` file:
+     ```powershell
+     docker build -t omragul/processing-service:latest backend/processing-service/
+     docker run -p 8083:8080 --env-file backend/processing-service/.env omragul/processing-service:latest
+     ```

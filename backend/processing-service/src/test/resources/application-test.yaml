@@ -1,3 +1,6 @@
+server:
+  port: 0
+
 spring:
   application:
     name: processing-service-test
@@ -8,8 +11,8 @@ spring:
   datasource:
     url: jdbc:h2:mem:processing_db;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
     driver-class-name: org.h2.Driver
-    username: ${PROCESSING_DB_USERNAME}
-    password: ${PROCESSING_DB_PASSWORD}
+    username: sa
+    password: ""
 
   jpa:
     hibernate:
@@ -26,9 +29,9 @@ processing:
   knowledge-service:
     url: http://localhost:8082
   multimodal-service:
-    url: http://localhost:8004
-  embedding-service:
     url: http://localhost:8003
+  embedding-service:
+    url: http://localhost:8001
   rag-service:
     url: http://localhost:8002
 

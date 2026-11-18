@@ -10,7 +10,9 @@ import com.omragul.gateway.util.TestJwtFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -35,10 +37,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         SecurityConfig.class,
         JwtAuthenticationFilter.class,
         JwtAuthenticationEntryPoint.class,
-        JwtValidator.class,
+        GatewayRouteControllerTest.TestJwtConfig.class,
         GatewayProperties.class
 })
 class GatewayRouteControllerTest {
+
+    @TestConfiguration
+    static class TestJwtConfig {
+        @Bean
+        public JwtValidator jwtValidator() {
+            return new JwtValidator(TestJwtFactory.getPublicKeyResource(), "http://localhost:8080");
+        }
+    }
 
     @Autowired
     private MockMvc mockMvc;

@@ -25,7 +25,7 @@ spring:
 
 analytics:
   jwt:
-    public-key: classpath:certs/test_public_key.pem
+    public-key: classpath:certs/dev_public_key.pem
     issuer: http://localhost:8080
 
   upstream:

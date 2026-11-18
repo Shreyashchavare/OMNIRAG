@@ -13,6 +13,8 @@ import com.omragul.identity.entity.user.User;
 import com.omragul.identity.enums.RoleType;
 import com.omragul.identity.enums.UserStatus;
 import com.omragul.identity.exception.IdentityException;
+import com.omragul.identity.exception.InvalidCredentialsException;
+import com.omragul.identity.exception.ResourceNotFoundException;
 import com.omragul.identity.exception.UserAlreadyExistsException;
 import com.omragul.identity.exception.UserLockedException;
 import com.omragul.identity.mapper.UserMapper;
@@ -153,7 +155,7 @@ class AuthServiceImplTest {
     }
 
     @Test
-    @DisplayName("Login: should record failed attempt and throw when password is wrong")
+    @DisplayName("Login: should record failed attempt and throw InvalidCredentialsException when password is wrong")
     void shouldRecordFailedAttemptOnInvalidPassword() {
         LoginRequestDto request = new LoginRequestDto("johndoe", "WrongPassword");
 
@@ -161,10 +163,26 @@ class AuthServiceImplTest {
         when(passwordService.matches("WrongPassword", "hashed_secret")).thenReturn(false);
 
         assertThatThrownBy(() -> authService.login(request))
-                .isInstanceOf(IdentityException.class)
-                .hasMessageContaining("Invalid username/email or password");
+                .isInstanceOf(InvalidCredentialsException.class)
+                .hasMessageContaining("Invalid identifier or password");
 
         verify(loginAttemptService).recordFailedLoginAttempt(testUserId);
+        verify(jwtService, never()).generateAccessToken(any());
+    }
+
+    @Test
+    @DisplayName("Login: should throw identical InvalidCredentialsException when user does not exist (prevents enumeration)")
+    void shouldThrowInvalidCredentialsWhenUserNotFound() {
+        LoginRequestDto request = new LoginRequestDto("nonexistent@omragul.com", "Password123!");
+
+        when(userService.getUserEntityByEmail("nonexistent@omragul.com"))
+                .thenThrow(new ResourceNotFoundException("User not found with email: nonexistent@omragul.com"));
+
+        assertThatThrownBy(() -> authService.login(request))
+                .isInstanceOf(InvalidCredentialsException.class)
+                .hasMessageContaining("Invalid identifier or password");
+
+        verify(loginAttemptService, never()).recordFailedLoginAttempt(any());
         verify(jwtService, never()).generateAccessToken(any());
     }
 
@@ -205,10 +223,75 @@ class AuthServiceImplTest {
     }
 
     @Test
+    @DisplayName("Refresh: should reject refresh when user account is locked")
+    void shouldRejectRefreshWhenAccountLocked() {
+        testUser.setAccountLocked(true);
+        RefreshToken storedToken = RefreshToken.builder()
+                .user(testUser)
+                .build();
+
+        when(refreshTokenService.validateToken("token")).thenReturn(storedToken);
+
+        assertThatThrownBy(() -> authService.refreshAccessToken("token"))
+                .isInstanceOf(UserLockedException.class)
+                .hasMessageContaining("User account is locked");
+
+        verify(jwtService, never()).generateAccessToken(any());
+        verify(refreshTokenService, never()).revokeToken(any());
+    }
+
+    @Test
+    @DisplayName("Refresh: should reject refresh when user account is soft-deleted")
+    void shouldRejectRefreshWhenAccountDeleted() {
+        testUser.setIsDeleted(true);
+        RefreshToken storedToken = RefreshToken.builder()
+                .user(testUser)
+                .build();
+
+        when(refreshTokenService.validateToken("token")).thenReturn(storedToken);
+
+        assertThatThrownBy(() -> authService.refreshAccessToken("token"))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("User account not found or deleted");
+
+        verify(jwtService, never()).generateAccessToken(any());
+        verify(refreshTokenService, never()).revokeToken(any());
+    }
+
+    @Test
+    @DisplayName("Refresh: should reject refresh when user account is inactive")
+    void shouldRejectRefreshWhenAccountInactive() {
+        testUser.setStatus(UserStatus.INACTIVE);
+        RefreshToken storedToken = RefreshToken.builder()
+                .user(testUser)
+                .build();
+
+        when(refreshTokenService.validateToken("token")).thenReturn(storedToken);
+
+        assertThatThrownBy(() -> authService.refreshAccessToken("token"))
+                .isInstanceOf(IdentityException.class)
+                .hasMessageContaining("User account is not active");
+
+        verify(jwtService, never()).generateAccessToken(any());
+        verify(refreshTokenService, never()).revokeToken(any());
+    }
+
+    @Test
     @DisplayName("Logout: should revoke token")
     void shouldLogout() {
         authService.logout("refresh_token_to_revoke");
         verify(refreshTokenService).revokeToken("refresh_token_to_revoke");
+    }
+
+    @Test
+    @DisplayName("Logout: should complete idempotently without throwing when token is not found or already revoked")
+    void shouldHandleIdempotentLogoutWhenTokenNotFound() {
+        doThrow(new ResourceNotFoundException("Not found"))
+                .when(refreshTokenService).revokeToken("invalid_or_revoked_token");
+
+        // Should not throw
+        authService.logout("invalid_or_revoked_token");
+        verify(refreshTokenService).revokeToken("invalid_or_revoked_token");
     }
 
     @Test

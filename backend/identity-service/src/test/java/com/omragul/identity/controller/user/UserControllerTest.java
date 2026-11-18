@@ -2,10 +2,13 @@ package com.omragul.identity.controller.user;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.omragul.identity.config.SecurityConfig;
+import com.omragul.identity.dto.request.user.CreateUserRequestDto;
 import com.omragul.identity.dto.request.user.UpdateUserProfileRequestDto;
+import com.omragul.identity.dto.request.user.UpdateUserRequestDto;
 import com.omragul.identity.dto.response.user.UserProfileResponseDto;
 import com.omragul.identity.dto.response.user.UserResponseDto;
 import com.omragul.identity.enums.UserStatus;
+import com.omragul.identity.exception.UserAlreadyExistsException;
 import com.omragul.identity.security.JwtAuthenticationEntryPoint;
 import com.omragul.identity.security.JwtAuthenticationFilter;
 import com.omragul.identity.service.security.JwtService;
@@ -218,5 +221,74 @@ class UserControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "69662d91-d592-41e4-8bcf-32718ca29205", authorities = {"USER_CREATE"})
+    @DisplayName("POST /api/v1/users: returns 201 Created when authorized with USER_CREATE")
+    void shouldCreateUserWhenAuthorized() throws Exception {
+        CreateUserRequestDto request = new CreateUserRequestDto("newuser", "newuser@omragul.com", "Password123!", null);
+        UserResponseDto responseDto = new UserResponseDto();
+        responseDto.setUserId(UUID.randomUUID());
+        responseDto.setUsername("newuser");
+        responseDto.setEmail("newuser@omragul.com");
+
+        when(userService.createUserByAdmin(eq(request), eq(UUID.fromString("69662d91-d592-41e4-8bcf-32718ca29205"))))
+                .thenReturn(responseDto);
+
+        mockMvc.perform(post("/api/v1/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.username").value("newuser"));
+    }
+
+    @Test
+    @WithMockUser(authorities = {"USER_UPDATE"})
+    @DisplayName("PUT /api/v1/users/{userId}: returns 200 OK when authorized with USER_UPDATE")
+    void shouldUpdateUserWhenAuthorized() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UpdateUserRequestDto request = new UpdateUserRequestDto("updated_name", "updated@omragul.com");
+        UserResponseDto responseDto = new UserResponseDto();
+        responseDto.setUserId(userId);
+        responseDto.setUsername("updated_name");
+        responseDto.setEmail("updated@omragul.com");
+
+        when(userService.updateUser(eq(userId), eq(request))).thenReturn(responseDto);
+
+        mockMvc.perform(put("/api/v1/users/{userId}", userId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value("updated_name"));
+    }
+
+    @Test
+    @WithMockUser(authorities = {"USER_UPDATE"})
+    @DisplayName("PUT /api/v1/users/{userId}: returns 409 Conflict when username/email is already taken")
+    void shouldReturn409WhenUpdatingToDuplicate() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UpdateUserRequestDto request = new UpdateUserRequestDto("existing_user", "updated@omragul.com");
+
+        when(userService.updateUser(eq(userId), any(UpdateUserRequestDto.class)))
+                .thenThrow(new UserAlreadyExistsException("Username already exists: existing_user"));
+
+        mockMvc.perform(put("/api/v1/users/{userId}", userId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("USER_ALREADY_EXISTS"));
+    }
+
+    @Test
+    @WithMockUser(authorities = {"USER_RESTORE"})
+    @DisplayName("PATCH /api/v1/users/{userId}/restore: returns 204 No Content when authorized with USER_RESTORE")
+    void shouldRestoreUserWhenAuthorized() throws Exception {
+        UUID userId = UUID.randomUUID();
+
+        mockMvc.perform(patch("/api/v1/users/{userId}/restore", userId))
+                .andExpect(status().isNoContent());
+
+        verify(userService).restoreUser(userId);
     }
 }
