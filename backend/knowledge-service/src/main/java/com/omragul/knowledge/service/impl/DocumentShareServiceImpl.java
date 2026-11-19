@@ -1,6 +1,7 @@
 package com.omragul.knowledge.service.impl;
 
 import com.omragul.knowledge.entity.DocumentShare;
+import com.omragul.knowledge.exception.ResourceNotFoundException;
 import com.omragul.knowledge.repository.DocumentShareRepository;
 import com.omragul.knowledge.service.DocumentShareService;
 import org.springframework.stereotype.Service;
@@ -164,7 +165,7 @@ public class DocumentShareServiceImpl
             UUID shareId
     ) {
         if (!shareRepository.existsById(shareId)) {
-            throw new RuntimeException(
+            throw new ResourceNotFoundException(
                     "Document share not found: "
                             + shareId
             );

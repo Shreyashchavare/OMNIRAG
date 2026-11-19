@@ -1,17 +1,29 @@
 package com.omragul.knowledge.dto;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 public class KnowledgeBaseUpdateRequest {
 
-    @NotBlank
-    @Size(max = 255)
+    @Size(max = 255, message = "Knowledge base name must not exceed 255 characters")
     private String name;
 
     private String description;
 
+    @Size(max = 200, message = "Slug must not exceed 200 characters")
+    private String slug;
+
     public KnowledgeBaseUpdateRequest() {
+    }
+
+    public KnowledgeBaseUpdateRequest(String name, String description) {
+        this.name = name;
+        this.description = description;
+    }
+
+    public KnowledgeBaseUpdateRequest(String name, String description, String slug) {
+        this.name = name;
+        this.description = description;
+        this.slug = slug;
     }
 
     public String getName() {
@@ -28,5 +40,13 @@ public class KnowledgeBaseUpdateRequest {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getSlug() {
+        return slug;
+    }
+
+    public void setSlug(String slug) {
+        this.slug = slug;
     }
 }

@@ -1,0 +1,28 @@
+server:
+  port: 0
+
+internal:
+  service:
+    secret: test-internal-secret
+
+spring:
+  application:
+    name: knowledge-service-test
+
+  datasource:
+    url: jdbc:h2:mem:knowledge_db;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+  flyway:
+    enabled: false

@@ -1,6 +1,10 @@
 
 server:
-  port: ${SERVER_PORT}
+  port: ${SERVER_PORT:${KNOWLEDGE_PORT:8082}}
+
+internal:
+  service:
+    secret: ${INTERNAL_SERVICE_SECRET}
 
 spring:
   application:

@@ -6,6 +6,8 @@ import com.omragul.knowledge.dto.DocumentUpdateRequest;
 import com.omragul.knowledge.entity.Document;
 import com.omragul.knowledge.mapper.DocumentMapper;
 import com.omragul.knowledge.service.DocumentService;
+import com.omragul.knowledge.exception.UnauthorizedException;
+import com.omragul.knowledge.security.InternalAuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -29,9 +31,14 @@ import java.util.UUID;
 public class DocumentController {
 
     private final DocumentService documentService;
+    private final InternalAuthService internalAuthService;
 
-    public DocumentController(DocumentService documentService) {
+    public DocumentController(
+            DocumentService documentService,
+            InternalAuthService internalAuthService
+    ) {
         this.documentService = documentService;
+        this.internalAuthService = internalAuthService;
     }
 
     // =========================================================
@@ -45,14 +52,18 @@ public class DocumentController {
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Document created successfully"),
-            @ApiResponse(responseCode = "400", description = "Invalid request")
+            @ApiResponse(responseCode = "400", description = "Invalid request"),
+            @ApiResponse(responseCode = "403", description = "Forbidden"),
+            @ApiResponse(responseCode = "404", description = "Knowledge base not found")
     })
     public ResponseEntity<DocumentResponse> create(
-            @Valid @RequestBody DocumentRequest request
+            @Valid @RequestBody DocumentRequest request,
+            @RequestHeader("X-User-Id") UUID userId
     ) {
         Document document = DocumentMapper.toEntity(request);
+        document.setOwnerId(userId);
 
-        Document created = documentService.create(document);
+        Document created = documentService.create(document, userId);
 
         return ResponseEntity.ok(
                 DocumentMapper.toResponse(created)
@@ -70,13 +81,22 @@ public class DocumentController {
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Document found"),
+            @ApiResponse(responseCode = "403", description = "Access denied"),
             @ApiResponse(responseCode = "404", description = "Document not found")
     })
     public ResponseEntity<DocumentResponse> getById(
             @Parameter(description = "Document ID")
-            @PathVariable UUID id
+            @PathVariable UUID id,
+            @RequestHeader(value = "X-User-Id", required = false) UUID userId,
+            @RequestHeader(value = "X-Internal-Secret", required = false) String internalSecret,
+            @RequestHeader(value = "X-Internal-Service-Secret", required = false) String internalServiceSecret
     ) {
-        Document document = documentService.getById(id);
+        String effectiveSecret = (internalSecret != null && !internalSecret.isBlank()) ? internalSecret : internalServiceSecret;
+        boolean isInternal = internalAuthService.isAuthorizedInternalService(effectiveSecret);
+        if (!isInternal && userId == null) {
+            throw new UnauthorizedException("Authentication required: missing user identity or internal service credentials");
+        }
+        Document document = documentService.getById(id, userId, isInternal);
 
         return ResponseEntity.ok(
                 DocumentMapper.toResponse(document)
@@ -94,12 +114,14 @@ public class DocumentController {
     )
     public ResponseEntity<DocumentResponse> getByKnowledgeBaseAndId(
             @PathVariable UUID knowledgeBaseId,
-            @PathVariable UUID documentId
+            @PathVariable UUID documentId,
+            @RequestHeader("X-User-Id") UUID userId
     ) {
         Document document =
                 documentService.getByKnowledgeBaseAndId(
                         knowledgeBaseId,
-                        documentId
+                        documentId,
+                        userId
                 );
 
         return ResponseEntity.ok(
@@ -117,10 +139,11 @@ public class DocumentController {
             description = "Retrieves all documents belonging to a knowledge base"
     )
     public ResponseEntity<List<DocumentResponse>> getByKnowledgeBase(
-            @PathVariable UUID knowledgeBaseId
+            @PathVariable UUID knowledgeBaseId,
+            @RequestHeader("X-User-Id") UUID userId
     ) {
         List<Document> documents =
-                documentService.getByKnowledgeBase(knowledgeBaseId);
+                documentService.getByKnowledgeBase(knowledgeBaseId, userId);
 
         return ResponseEntity.ok(
                 DocumentMapper.toResponseList(documents)
@@ -138,11 +161,13 @@ public class DocumentController {
     )
     public ResponseEntity<Page<DocumentResponse>> getByKnowledgeBase(
             @PathVariable UUID knowledgeBaseId,
-            Pageable pageable
+            Pageable pageable,
+            @RequestHeader("X-User-Id") UUID userId
     ) {
         Page<Document> documents =
                 documentService.getByKnowledgeBase(
                         knowledgeBaseId,
+                        userId,
                         pageable
                 );
 
@@ -162,12 +187,14 @@ public class DocumentController {
     )
     public ResponseEntity<List<DocumentResponse>> getByKnowledgeBaseAndStatus(
             @PathVariable UUID knowledgeBaseId,
-            @PathVariable Document.Status status
+            @PathVariable Document.Status status,
+            @RequestHeader("X-User-Id") UUID userId
     ) {
         List<Document> documents =
                 documentService.getByKnowledgeBaseAndStatus(
                         knowledgeBaseId,
-                        status
+                        status,
+                        userId
                 );
 
         return ResponseEntity.ok(
@@ -187,12 +214,14 @@ public class DocumentController {
     public ResponseEntity<Page<DocumentResponse>> getByKnowledgeBaseAndStatus(
             @PathVariable UUID knowledgeBaseId,
             @PathVariable Document.Status status,
-            Pageable pageable
+            Pageable pageable,
+            @RequestHeader("X-User-Id") UUID userId
     ) {
         Page<Document> documents =
                 documentService.getByKnowledgeBaseAndStatus(
                         knowledgeBaseId,
                         status,
+                        userId,
                         pageable
                 );
 
@@ -212,12 +241,14 @@ public class DocumentController {
     )
     public ResponseEntity<List<DocumentResponse>> getByProcessingStatus(
             @PathVariable UUID knowledgeBaseId,
-            @PathVariable Document.ProcessingStatus processingStatus
+            @PathVariable Document.ProcessingStatus processingStatus,
+            @RequestHeader("X-User-Id") UUID userId
     ) {
         List<Document> documents =
                 documentService.getByProcessingStatus(
                         knowledgeBaseId,
-                        processingStatus
+                        processingStatus,
+                        userId
                 );
 
         return ResponseEntity.ok(
@@ -235,10 +266,11 @@ public class DocumentController {
             description = "Retrieves all documents belonging to a folder"
     )
     public ResponseEntity<List<DocumentResponse>> getByFolder(
-            @PathVariable UUID folderId
+            @PathVariable UUID folderId,
+            @RequestHeader("X-User-Id") UUID userId
     ) {
         List<Document> documents =
-                documentService.getByFolder(folderId);
+                documentService.getByFolder(folderId, userId);
 
         return ResponseEntity.ok(
                 DocumentMapper.toResponseList(documents)
@@ -256,11 +288,13 @@ public class DocumentController {
     )
     public ResponseEntity<Page<DocumentResponse>> getByFolder(
             @PathVariable UUID folderId,
-            Pageable pageable
+            Pageable pageable,
+            @RequestHeader("X-User-Id") UUID userId
     ) {
         Page<Document> documents =
                 documentService.getByFolder(
                         folderId,
+                        userId,
                         pageable
                 );
 
@@ -279,10 +313,11 @@ public class DocumentController {
             description = "Retrieves all documents belonging to a category"
     )
     public ResponseEntity<List<DocumentResponse>> getByCategory(
-            @PathVariable UUID categoryId
+            @PathVariable UUID categoryId,
+            @RequestHeader("X-User-Id") UUID userId
     ) {
         List<Document> documents =
-                documentService.getByCategory(categoryId);
+                documentService.getByCategory(categoryId, userId);
 
         return ResponseEntity.ok(
                 DocumentMapper.toResponseList(documents)
@@ -300,11 +335,13 @@ public class DocumentController {
     )
     public ResponseEntity<Page<DocumentResponse>> getByCategory(
             @PathVariable UUID categoryId,
-            Pageable pageable
+            Pageable pageable,
+            @RequestHeader("X-User-Id") UUID userId
     ) {
         Page<Document> documents =
                 documentService.getByCategory(
                         categoryId,
+                        userId,
                         pageable
                 );
 
@@ -323,10 +360,11 @@ public class DocumentController {
             description = "Retrieves all documents owned by a user"
     )
     public ResponseEntity<List<DocumentResponse>> getByOwner(
-            @PathVariable UUID ownerId
+            @PathVariable UUID ownerId,
+            @RequestHeader("X-User-Id") UUID userId
     ) {
         List<Document> documents =
-                documentService.getByOwner(ownerId);
+                documentService.getByOwner(ownerId, userId);
 
         return ResponseEntity.ok(
                 DocumentMapper.toResponseList(documents)
@@ -345,11 +383,13 @@ public class DocumentController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Document updated successfully"),
             @ApiResponse(responseCode = "400", description = "Invalid request"),
+            @ApiResponse(responseCode = "403", description = "Access denied"),
             @ApiResponse(responseCode = "404", description = "Document not found")
     })
     public ResponseEntity<DocumentResponse> update(
             @PathVariable UUID id,
-            @Valid @RequestBody DocumentUpdateRequest request
+            @Valid @RequestBody DocumentUpdateRequest request,
+            @RequestHeader("X-User-Id") UUID userId
     ) {
         Document document = new Document();
 
@@ -361,7 +401,8 @@ public class DocumentController {
         Document updated =
                 documentService.update(
                         id,
-                        document
+                        document,
+                        userId
                 );
 
         return ResponseEntity.ok(
@@ -376,12 +417,18 @@ public class DocumentController {
     @PatchMapping("/{id}/processing-status/{processingStatus}")
     @Operation(
             summary = "Update document processing status",
-            description = "Updates the processing status of a document"
+            description = "Updates the processing status of a document (restricted to internal services)"
     )
     public ResponseEntity<DocumentResponse> updateProcessingStatus(
             @PathVariable UUID id,
-            @PathVariable Document.ProcessingStatus processingStatus
+            @PathVariable Document.ProcessingStatus processingStatus,
+            @RequestHeader(value = "X-Internal-Secret", required = false) String internalSecret,
+            @RequestHeader(value = "X-Internal-Service-Secret", required = false) String internalServiceSecret
     ) {
+        String effectiveSecret = (internalSecret != null && !internalSecret.isBlank()) ? internalSecret : internalServiceSecret;
+        if (!internalAuthService.isAuthorizedInternalService(effectiveSecret)) {
+            throw new UnauthorizedException("Access denied: Invalid or missing internal service credentials");
+        }
         Document updated =
                 documentService.updateProcessingStatus(
                         id,
@@ -403,10 +450,11 @@ public class DocumentController {
             description = "Archives an active document"
     )
     public ResponseEntity<DocumentResponse> archive(
-            @PathVariable UUID id
+            @PathVariable UUID id,
+            @RequestHeader("X-User-Id") UUID userId
     ) {
         Document archived =
-                documentService.archive(id);
+                documentService.archive(id, userId);
 
         return ResponseEntity.ok(
                 DocumentMapper.toResponse(archived)
@@ -423,10 +471,11 @@ public class DocumentController {
             description = "Restores an archived or deleted document"
     )
     public ResponseEntity<DocumentResponse> restore(
-            @PathVariable UUID id
+            @PathVariable UUID id,
+            @RequestHeader("X-User-Id") UUID userId
     ) {
         Document restored =
-                documentService.restore(id);
+                documentService.restore(id, userId);
 
         return ResponseEntity.ok(
                 DocumentMapper.toResponse(restored)
@@ -443,10 +492,11 @@ public class DocumentController {
             description = "Soft deletes a document"
     )
     public ResponseEntity<DocumentResponse> delete(
-            @PathVariable UUID id
+            @PathVariable UUID id,
+            @RequestHeader("X-User-Id") UUID userId
     ) {
         Document deleted =
-                documentService.softDelete(id);
+                documentService.softDelete(id, userId);
 
         return ResponseEntity.ok(
                 DocumentMapper.toResponse(deleted)

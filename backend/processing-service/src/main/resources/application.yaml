@@ -36,6 +36,7 @@ springdoc:
 processing:
   knowledge-service:
     url: ${KNOWLEDGE_SERVICE_URL}
+    secret: ${INTERNAL_SERVICE_SECRET}
   multimodal-service:
     url: ${MULTIMODAL_SERVICE_URL}
   embedding-service:

@@ -28,7 +28,7 @@ class KnowledgeServiceClientTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        client = new KnowledgeServiceClientImpl("http://localhost:8082", 2000, 5000);
+        client = new KnowledgeServiceClientImpl("http://localhost:8082", "test-secret", 2000, 5000);
 
         RestClient.Builder builder = RestClient.builder().baseUrl("http://localhost:8082");
         mockServer = MockRestServiceServer.bindTo(builder).build();
@@ -52,6 +52,7 @@ class KnowledgeServiceClientTest {
 
         mockServer.expect(requestTo("http://localhost:8082/api/v1/documents/" + docId))
                 .andExpect(method(HttpMethod.GET))
+                .andExpect(header("X-Internal-Secret", "test-secret"))
                 .andRespond(withSuccess(objectMapper.writeValueAsString(doc), MediaType.APPLICATION_JSON));
 
         Optional<DocumentDto> result = client.getDocument(docId);
@@ -82,6 +83,7 @@ class KnowledgeServiceClientTest {
 
         mockServer.expect(requestTo("http://localhost:8082/api/v1/documents/" + docId + "/processing-status/COMPLETED"))
                 .andExpect(method(HttpMethod.PATCH))
+                .andExpect(header("X-Internal-Secret", "test-secret"))
                 .andRespond(withSuccess());
 
         assertDoesNotThrow(() -> client.updateDocumentProcessingStatus(docId, "COMPLETED"));
@@ -119,6 +121,25 @@ class KnowledgeServiceClientTest {
                 () -> client.getDocument(docId)
         );
         assertEquals("knowledge-service", ex.getServiceName());
+        mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("Should throw DownstreamServiceException on Knowledge Service 403 Forbidden (invalid internal secret)")
+    void testGetDocumentForbidden403() {
+        UUID docId = UUID.randomUUID();
+
+        mockServer.expect(requestTo("http://localhost:8082/api/v1/documents/" + docId))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header("X-Internal-Secret", "test-secret"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN));
+
+        com.omragul.processing.exception.DownstreamServiceException ex = assertThrows(
+                com.omragul.processing.exception.DownstreamServiceException.class,
+                () -> client.getDocument(docId)
+        );
+        assertEquals("knowledge-service", ex.getServiceName());
+        assertEquals(403, ex.getStatusCode());
         mockServer.verify();
     }
 }

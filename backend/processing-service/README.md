@@ -200,13 +200,13 @@ The resulting artifact is located at:
 - **Dockerfile:** Multi-stage build provided (`maven:3.9.11-eclipse-temurin-21` -> `eclipse-temurin:21-jre`).
 - **Environment Status:** Docker Desktop daemon was not running during local verification (`open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified`).
 - **Execution with Docker:**
-  1. Copy `.env.example` to `.env`:
+  1. Configure the centralized root `.env` from `.env.example`:
      ```powershell
-     cp backend/processing-service/.env.example backend/processing-service/.env
+     cp .env.example .env
      ```
-  2. Fill in the required local environment variables in `.env` (never commit the actual `.env` file).
-  3. Once Docker Desktop is launched, build and run using the actual `.env` file:
+  2. Fill in the required local environment variables in root `.env` (never commit the actual `.env` file).
+  3. Build and run using Docker Compose or standalone with root `.env`:
      ```powershell
      docker build -t omragul/processing-service:latest backend/processing-service/
-     docker run -p 8083:8080 --env-file backend/processing-service/.env omragul/processing-service:latest
+     docker run -p 8083:8080 --env-file .env omragul/processing-service:latest
      ```
