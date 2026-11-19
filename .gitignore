@@ -13,18 +13,33 @@ Thumbs.db
 ############################
 .env
 .env.*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+**/.env
+**/.env.*
+**/.env.local
+**/.env.development.local
+**/.env.test.local
+**/.env.production.local
 !.env.example
 !.env.template
+!**/.env.example
+!**/.env.template
 
 # Secrets and private keys
 *.key
+*.pem.key
 *.p12
 *.pfx
 *.jks
+*.keystore
 *private_key*.pem
 private_key.pem
 secrets/
 **/secrets/
+*.credentials
 
 ############################
 # IntelliJ IDEA

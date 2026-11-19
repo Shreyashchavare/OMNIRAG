@@ -1,7 +1,15 @@
 package com.omragul.knowledge.service.impl;
 
 import com.omragul.knowledge.entity.Document;
+import com.omragul.knowledge.entity.DocumentPermission;
+import com.omragul.knowledge.entity.KnowledgeBase;
+import com.omragul.knowledge.exception.ResourceNotFoundException;
+import com.omragul.knowledge.exception.UnauthorizedException;
+import com.omragul.knowledge.repository.CategoryRepository;
 import com.omragul.knowledge.repository.DocumentRepository;
+import com.omragul.knowledge.repository.FolderRepository;
+import com.omragul.knowledge.repository.KnowledgeBaseRepository;
+import com.omragul.knowledge.service.DocumentPermissionService;
 import com.omragul.knowledge.service.DocumentService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -17,66 +25,228 @@ import java.util.UUID;
 public class DocumentServiceImpl implements DocumentService {
 
     private final DocumentRepository documentRepository;
+    private final KnowledgeBaseRepository knowledgeBaseRepository;
+    private final DocumentPermissionService documentPermissionService;
+    private final FolderRepository folderRepository;
+    private final CategoryRepository categoryRepository;
 
     public DocumentServiceImpl(
-            DocumentRepository documentRepository
+            DocumentRepository documentRepository,
+            KnowledgeBaseRepository knowledgeBaseRepository,
+            DocumentPermissionService documentPermissionService,
+            FolderRepository folderRepository,
+            CategoryRepository categoryRepository
     ) {
         this.documentRepository = documentRepository;
+        this.knowledgeBaseRepository = knowledgeBaseRepository;
+        this.documentPermissionService = documentPermissionService;
+        this.folderRepository = folderRepository;
+        this.categoryRepository = categoryRepository;
+    }
+
+    private KnowledgeBase checkKnowledgeBaseWriteAccess(UUID kbId, UUID userId) {
+        KnowledgeBase kb = knowledgeBaseRepository.findById(kbId)
+                .orElseThrow(() -> new ResourceNotFoundException("Knowledge base not found: " + kbId));
+
+        if (userId == null) {
+            throw new UnauthorizedException("Authenticated user ID is required");
+        }
+
+        if (kb.getOwnerId().equals(userId)) {
+            return kb;
+        }
+
+        if (kb.getVisibility() == KnowledgeBase.Visibility.PRIVATE) {
+            throw new UnauthorizedException("User is not authorized to create documents in this private knowledge base");
+        }
+
+        return kb;
+    }
+
+    private void checkKnowledgeBaseReadAccess(UUID kbId, UUID userId) {
+        if (userId == null) {
+            throw new UnauthorizedException("Authenticated user ID is required");
+        }
+
+        KnowledgeBase kb = knowledgeBaseRepository.findById(kbId)
+                .orElseThrow(() -> new ResourceNotFoundException("Knowledge base not found: " + kbId));
+
+        if (kb.getOwnerId().equals(userId)) {
+            return;
+        }
+
+        if (kb.getVisibility() != KnowledgeBase.Visibility.PRIVATE) {
+            return;
+        }
+
+        throw new UnauthorizedException("User does not have access to private knowledge base: " + kbId);
+    }
+
+    private void checkDocumentReadAccess(Document document, UUID userId) {
+        if (userId == null) {
+            throw new UnauthorizedException("Authenticated user ID is required");
+        }
+
+        if (document.getOwnerId().equals(userId)) {
+            return;
+        }
+
+        if (documentPermissionService.hasPermission(document.getId(), userId, DocumentPermission.Permission.READ)
+                || documentPermissionService.hasPermission(document.getId(), userId, DocumentPermission.Permission.WRITE)
+                || documentPermissionService.hasPermission(document.getId(), userId, DocumentPermission.Permission.OWNER)) {
+            return;
+        }
+
+        KnowledgeBase kb = knowledgeBaseRepository.findById(document.getKnowledgeBaseId()).orElse(null);
+        if (kb != null) {
+            if (kb.getOwnerId().equals(userId)) {
+                return;
+            }
+            if (kb.getVisibility() != KnowledgeBase.Visibility.PRIVATE) {
+                return;
+            }
+        }
+
+        throw new UnauthorizedException("User does not have permission to view document: " + document.getId());
+    }
+
+    private void checkDocumentWriteAccess(Document document, UUID userId) {
+        if (userId == null) {
+            throw new UnauthorizedException("Authenticated user ID is required");
+        }
+
+        if (document.getOwnerId().equals(userId)) {
+            return;
+        }
+
+        if (documentPermissionService.hasPermission(document.getId(), userId, DocumentPermission.Permission.WRITE)
+                || documentPermissionService.hasPermission(document.getId(), userId, DocumentPermission.Permission.OWNER)) {
+            return;
+        }
+
+        KnowledgeBase kb = knowledgeBaseRepository.findById(document.getKnowledgeBaseId()).orElse(null);
+        if (kb != null && kb.getOwnerId().equals(userId)) {
+            return;
+        }
+
+        throw new UnauthorizedException("User does not have permission to update document: " + document.getId());
+    }
+
+    private void checkDocumentAdminAccess(Document document, UUID userId) {
+        if (userId == null) {
+            throw new UnauthorizedException("Authenticated user ID is required");
+        }
+
+        if (document.getOwnerId().equals(userId)) {
+            return;
+        }
+
+        if (documentPermissionService.hasPermission(document.getId(), userId, DocumentPermission.Permission.OWNER)) {
+            return;
+        }
+
+        KnowledgeBase kb = knowledgeBaseRepository.findById(document.getKnowledgeBaseId()).orElse(null);
+        if (kb != null && kb.getOwnerId().equals(userId)) {
+            return;
+        }
+
+        throw new UnauthorizedException("User does not have permission to manage document: " + document.getId());
+    }
+
+    private void checkDocumentDeleteAccess(Document document, UUID userId) {
+        if (userId == null) {
+            throw new UnauthorizedException("Authenticated user ID is required");
+        }
+
+        if (document.getOwnerId().equals(userId)) {
+            return;
+        }
+
+        if (documentPermissionService.hasPermission(document.getId(), userId, DocumentPermission.Permission.DELETE)
+                || documentPermissionService.hasPermission(document.getId(), userId, DocumentPermission.Permission.OWNER)) {
+            return;
+        }
+
+        KnowledgeBase kb = knowledgeBaseRepository.findById(document.getKnowledgeBaseId()).orElse(null);
+        if (kb != null && kb.getOwnerId().equals(userId)) {
+            return;
+        }
+
+        throw new UnauthorizedException("User does not have permission to delete document: " + document.getId());
     }
 
     @Override
-    public Document create(Document document) {
+    public Document create(Document document, UUID userId) {
+        if (document == null) {
+            throw new IllegalArgumentException("Document cannot be null");
+        }
+        if (userId == null) {
+            throw new UnauthorizedException("Authenticated user ID is required");
+        }
+        if (document.getKnowledgeBaseId() == null) {
+            throw new IllegalArgumentException("Knowledge base ID is required");
+        }
+
+        checkKnowledgeBaseWriteAccess(document.getKnowledgeBaseId(), userId);
+
+        document.setOwnerId(userId);
 
         LocalDateTime now = LocalDateTime.now();
-
         document.setCreatedAt(now);
         document.setUpdatedAt(now);
-
         document.setCurrentVersion(1);
-        document.setProcessingStatus(
-                Document.ProcessingStatus.PENDING
-        );
-        document.setStatus(
-                Document.Status.ACTIVE
-        );
+        document.setProcessingStatus(Document.ProcessingStatus.PENDING);
+        document.setStatus(Document.Status.ACTIVE);
         document.setVersion(1);
 
         return documentRepository.save(document);
     }
+
     @Override
     @Transactional(readOnly = true)
-    public Document getById(UUID documentId) {
-        return documentRepository.findById(documentId)
-                .orElseThrow(() ->
-                        new RuntimeException(
-                                "Document not found: " + documentId
-                        )
-                );
+    public Document getById(UUID documentId, UUID userId, boolean isInternalService) {
+        Document document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Document not found: " + documentId));
+
+        if (!isInternalService) {
+            checkDocumentReadAccess(document, userId);
+        }
+
+        return document;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Document getById(UUID documentId, UUID userId) {
+        return getById(documentId, userId, false);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Document getByKnowledgeBaseAndId(
             UUID knowledgeBaseId,
-            UUID documentId
+            UUID documentId,
+            UUID userId
     ) {
-        return documentRepository
+        Document document = documentRepository
                 .findByKnowledgeBaseIdAndId(
                         knowledgeBaseId,
                         documentId
                 )
-                .orElseThrow(() ->
-                        new RuntimeException(
-                                "Document not found: " + documentId
-                        )
-                );
+                .orElseThrow(() -> new ResourceNotFoundException("Document not found: " + documentId));
+
+        checkDocumentReadAccess(document, userId);
+
+        return document;
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<Document> getByKnowledgeBase(
-            UUID knowledgeBaseId
+            UUID knowledgeBaseId,
+            UUID userId
     ) {
+        checkKnowledgeBaseReadAccess(knowledgeBaseId, userId);
         return documentRepository
                 .findByKnowledgeBaseId(knowledgeBaseId);
     }
@@ -85,8 +255,10 @@ public class DocumentServiceImpl implements DocumentService {
     @Transactional(readOnly = true)
     public Page<Document> getByKnowledgeBase(
             UUID knowledgeBaseId,
+            UUID userId,
             Pageable pageable
     ) {
+        checkKnowledgeBaseReadAccess(knowledgeBaseId, userId);
         return documentRepository
                 .findByKnowledgeBaseId(
                         knowledgeBaseId,
@@ -98,8 +270,10 @@ public class DocumentServiceImpl implements DocumentService {
     @Transactional(readOnly = true)
     public List<Document> getByKnowledgeBaseAndStatus(
             UUID knowledgeBaseId,
-            Document.Status status
+            Document.Status status,
+            UUID userId
     ) {
+        checkKnowledgeBaseReadAccess(knowledgeBaseId, userId);
         return documentRepository
                 .findByKnowledgeBaseIdAndStatus(
                         knowledgeBaseId,
@@ -112,8 +286,10 @@ public class DocumentServiceImpl implements DocumentService {
     public Page<Document> getByKnowledgeBaseAndStatus(
             UUID knowledgeBaseId,
             Document.Status status,
+            UUID userId,
             Pageable pageable
     ) {
+        checkKnowledgeBaseReadAccess(knowledgeBaseId, userId);
         return documentRepository
                 .findByKnowledgeBaseIdAndStatus(
                         knowledgeBaseId,
@@ -126,8 +302,10 @@ public class DocumentServiceImpl implements DocumentService {
     @Transactional(readOnly = true)
     public List<Document> getByProcessingStatus(
             UUID knowledgeBaseId,
-            Document.ProcessingStatus processingStatus
+            Document.ProcessingStatus processingStatus,
+            UUID userId
     ) {
+        checkKnowledgeBaseReadAccess(knowledgeBaseId, userId);
         return documentRepository
                 .findByKnowledgeBaseIdAndProcessingStatus(
                         knowledgeBaseId,
@@ -138,8 +316,12 @@ public class DocumentServiceImpl implements DocumentService {
     @Override
     @Transactional(readOnly = true)
     public List<Document> getByFolder(
-            UUID folderId
+            UUID folderId,
+            UUID userId
     ) {
+        var folder = folderRepository.findById(folderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Folder not found: " + folderId));
+        checkKnowledgeBaseReadAccess(folder.getKnowledgeBaseId(), userId);
         return documentRepository.findByFolderId(folderId);
     }
 
@@ -147,8 +329,12 @@ public class DocumentServiceImpl implements DocumentService {
     @Transactional(readOnly = true)
     public Page<Document> getByFolder(
             UUID folderId,
+            UUID userId,
             Pageable pageable
     ) {
+        var folder = folderRepository.findById(folderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Folder not found: " + folderId));
+        checkKnowledgeBaseReadAccess(folder.getKnowledgeBaseId(), userId);
         return documentRepository.findByFolderId(
                 folderId,
                 pageable
@@ -158,8 +344,12 @@ public class DocumentServiceImpl implements DocumentService {
     @Override
     @Transactional(readOnly = true)
     public List<Document> getByCategory(
-            UUID categoryId
+            UUID categoryId,
+            UUID userId
     ) {
+        var category = categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + categoryId));
+        checkKnowledgeBaseReadAccess(category.getKnowledgeBaseId(), userId);
         return documentRepository.findByCategoryId(categoryId);
     }
 
@@ -167,8 +357,12 @@ public class DocumentServiceImpl implements DocumentService {
     @Transactional(readOnly = true)
     public Page<Document> getByCategory(
             UUID categoryId,
+            UUID userId,
             Pageable pageable
     ) {
+        var category = categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + categoryId));
+        checkKnowledgeBaseReadAccess(category.getKnowledgeBaseId(), userId);
         return documentRepository.findByCategoryId(
                 categoryId,
                 pageable
@@ -178,43 +372,56 @@ public class DocumentServiceImpl implements DocumentService {
     @Override
     @Transactional(readOnly = true)
     public List<Document> getByOwner(
-            UUID ownerId
+            UUID ownerId,
+            UUID userId
     ) {
+        if (userId == null) {
+            throw new UnauthorizedException("Authenticated user ID is required");
+        }
+        if (!ownerId.equals(userId)) {
+            throw new UnauthorizedException("User is not authorized to list documents of another owner");
+        }
         return documentRepository.findByOwnerId(ownerId);
     }
 
     @Override
     public Document update(
             UUID documentId,
-            Document document
+            Document document,
+            UUID userId
     ) {
-        Document existing = getById(documentId);
+        Document existing = documentRepository.findById(documentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Document not found: " + documentId));
+
+        checkDocumentWriteAccess(existing, userId);
 
         existing.setFolderId(document.getFolderId());
         existing.setCategoryId(document.getCategoryId());
 
-        existing.setName(document.getName());
-        existing.setOriginalFilename(
-                document.getOriginalFilename()
-        );
-        existing.setStoredFilename(
-                document.getStoredFilename()
-        );
-        existing.setStoragePath(
-                document.getStoragePath()
-        );
-        existing.setFileExtension(
-                document.getFileExtension()
-        );
-        existing.setMimeType(
-                document.getMimeType()
-        );
-        existing.setFileSizeBytes(
-                document.getFileSizeBytes()
-        );
-        existing.setChecksum(
-                document.getChecksum()
-        );
+        if (document.getName() != null && !document.getName().isBlank()) {
+            existing.setName(document.getName());
+        }
+        if (document.getOriginalFilename() != null) {
+            existing.setOriginalFilename(document.getOriginalFilename());
+        }
+        if (document.getStoredFilename() != null) {
+            existing.setStoredFilename(document.getStoredFilename());
+        }
+        if (document.getStoragePath() != null) {
+            existing.setStoragePath(document.getStoragePath());
+        }
+        if (document.getFileExtension() != null) {
+            existing.setFileExtension(document.getFileExtension());
+        }
+        if (document.getMimeType() != null) {
+            existing.setMimeType(document.getMimeType());
+        }
+        if (document.getFileSizeBytes() != null) {
+            existing.setFileSizeBytes(document.getFileSizeBytes());
+        }
+        if (document.getChecksum() != null) {
+            existing.setChecksum(document.getChecksum());
+        }
 
         existing.setUpdatedAt(LocalDateTime.now());
         existing.setVersion(existing.getVersion() + 1);
@@ -227,7 +434,8 @@ public class DocumentServiceImpl implements DocumentService {
             UUID documentId,
             Document.ProcessingStatus processingStatus
     ) {
-        Document document = getById(documentId);
+        Document document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Document not found: " + documentId));
 
         document.setProcessingStatus(processingStatus);
         document.setUpdatedAt(LocalDateTime.now());
@@ -237,8 +445,11 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     @Override
-    public Document archive(UUID documentId) {
-        Document document = getById(documentId);
+    public Document archive(UUID documentId, UUID userId) {
+        Document document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Document not found: " + documentId));
+
+        checkDocumentAdminAccess(document, userId);
 
         document.setStatus(Document.Status.ARCHIVED);
         document.setUpdatedAt(LocalDateTime.now());
@@ -248,8 +459,11 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     @Override
-    public Document restore(UUID documentId) {
-        Document document = getById(documentId);
+    public Document restore(UUID documentId, UUID userId) {
+        Document document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Document not found: " + documentId));
+
+        checkDocumentAdminAccess(document, userId);
 
         document.setStatus(Document.Status.ACTIVE);
         document.setDeletedAt(null);
@@ -260,8 +474,11 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     @Override
-    public Document softDelete(UUID documentId) {
-        Document document = getById(documentId);
+    public Document softDelete(UUID documentId, UUID userId) {
+        Document document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Document not found: " + documentId));
+
+        checkDocumentDeleteAccess(document, userId);
 
         document.setStatus(Document.Status.DELETED);
         document.setDeletedAt(LocalDateTime.now());

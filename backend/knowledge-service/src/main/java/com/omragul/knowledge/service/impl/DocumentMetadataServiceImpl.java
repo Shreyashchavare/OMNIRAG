@@ -1,6 +1,7 @@
 package com.omragul.knowledge.service.impl;
 
 import com.omragul.knowledge.entity.DocumentMetadata;
+import com.omragul.knowledge.exception.ResourceNotFoundException;
 import com.omragul.knowledge.repository.DocumentMetadataRepository;
 import com.omragul.knowledge.service.DocumentMetadataService;
 import org.springframework.stereotype.Service;
@@ -132,7 +133,7 @@ public class DocumentMetadataServiceImpl
             UUID metadataId
     ) {
         if (!metadataRepository.existsById(metadataId)) {
-            throw new RuntimeException(
+            throw new ResourceNotFoundException(
                     "Document metadata not found: "
                             + metadataId
             );
@@ -152,7 +153,7 @@ public class DocumentMetadataServiceImpl
                         metadataKey
                 )) {
 
-            throw new RuntimeException(
+            throw new ResourceNotFoundException(
                     "Metadata not found for key: "
                             + metadataKey
             );

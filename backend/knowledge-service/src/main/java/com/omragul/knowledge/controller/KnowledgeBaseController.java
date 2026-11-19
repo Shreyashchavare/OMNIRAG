@@ -1,11 +1,14 @@
 package com.omragul.knowledge.controller;
 
+import com.omragul.knowledge.dto.KnowledgeBaseCreateRequest;
 import com.omragul.knowledge.dto.KnowledgeBaseResponse;
 import com.omragul.knowledge.dto.KnowledgeBaseStatisticsResponse;
+import com.omragul.knowledge.dto.KnowledgeBaseUpdateRequest;
 import com.omragul.knowledge.entity.KnowledgeBase;
 import com.omragul.knowledge.mapper.KnowledgeBaseMapper;
 import com.omragul.knowledge.service.KnowledgeBaseService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -31,9 +34,13 @@ public class KnowledgeBaseController {
 
     @PostMapping
     public ResponseEntity<KnowledgeBaseResponse> create(
-            @RequestBody KnowledgeBase knowledgeBase,
+            @Valid @RequestBody KnowledgeBaseCreateRequest request,
             @RequestHeader("X-User-Id") UUID userId
     ) {
+        KnowledgeBase knowledgeBase = new KnowledgeBase();
+        knowledgeBase.setName(request.getName());
+        knowledgeBase.setDescription(request.getDescription());
+        knowledgeBase.setSlug(request.getSlug());
 
         KnowledgeBase created =
                 knowledgeBaseService.create(
@@ -69,11 +76,12 @@ public class KnowledgeBaseController {
 
     @GetMapping("/{id}")
     public ResponseEntity<KnowledgeBaseResponse> getById(
-            @PathVariable UUID id
+            @PathVariable UUID id,
+            @RequestHeader("X-User-Id") UUID userId
     ) {
 
         KnowledgeBase knowledgeBase =
-                knowledgeBaseService.getById(id);
+                knowledgeBaseService.getById(id, userId);
 
         return ResponseEntity.ok(
                 KnowledgeBaseMapper.toResponse(
@@ -84,11 +92,12 @@ public class KnowledgeBaseController {
 
     @GetMapping("/slug/{slug}")
     public ResponseEntity<KnowledgeBaseResponse> getBySlug(
-            @PathVariable String slug
+            @PathVariable String slug,
+            @RequestHeader("X-User-Id") UUID userId
     ) {
 
         KnowledgeBase knowledgeBase =
-                knowledgeBaseService.getBySlug(slug);
+                knowledgeBaseService.getBySlug(slug, userId);
 
         return ResponseEntity.ok(
                 KnowledgeBaseMapper.toResponse(
@@ -100,18 +109,22 @@ public class KnowledgeBaseController {
     @PutMapping("/{id}")
     public ResponseEntity<KnowledgeBaseResponse> update(
             @PathVariable UUID id,
+            @Valid @RequestBody(required = false) KnowledgeBaseUpdateRequest request,
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String description,
             @RequestParam(required = false) String slug,
             @RequestHeader("X-User-Id") UUID userId
     ) {
+        String targetName = request != null && request.getName() != null ? request.getName() : name;
+        String targetDesc = request != null && request.getDescription() != null ? request.getDescription() : description;
+        String targetSlug = request != null && request.getSlug() != null ? request.getSlug() : slug;
 
         KnowledgeBase updated =
                 knowledgeBaseService.update(
                         id,
-                        name,
-                        description,
-                        slug,
+                        targetName,
+                        targetDesc,
+                        targetSlug,
                         userId
                 );
 
@@ -162,11 +175,12 @@ public class KnowledgeBaseController {
 
     @GetMapping("/{id}/statistics")
     public ResponseEntity<KnowledgeBaseStatisticsResponse> getStatistics(
-            @PathVariable UUID id
+            @PathVariable UUID id,
+            @RequestHeader("X-User-Id") UUID userId
     ) {
 
         KnowledgeBase knowledgeBase =
-                knowledgeBaseService.getActiveById(id);
+                knowledgeBaseService.getActiveById(id, userId);
 
         return ResponseEntity.ok(
                 KnowledgeBaseMapper.toStatisticsResponse(
@@ -174,11 +188,14 @@ public class KnowledgeBaseController {
                 )
         );
     }
+
     @PatchMapping("/{id}/restore")
     public ResponseEntity<KnowledgeBaseResponse> restore(
-            @PathVariable UUID id) {
+            @PathVariable UUID id,
+            @RequestHeader("X-User-Id") UUID userId
+    ) {
 
-        KnowledgeBase knowledgeBase = knowledgeBaseService.restore(id);
+        KnowledgeBase knowledgeBase = knowledgeBaseService.restore(id, userId);
 
         return ResponseEntity.ok(
                 KnowledgeBaseMapper.toResponse(knowledgeBase)

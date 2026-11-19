@@ -48,7 +48,15 @@ public class ReverseProxyService {
             "transfer-encoding",
             "upgrade",
             "host",
-            "content-length"
+            "content-length",
+            "x-internal-secret",
+            "x-internal-service-secret",
+            "x-internal-token",
+            "x-user-id",
+            "x-user-roles",
+            "x-user-role",
+            "x-user-email",
+            "x-user-name"
     );
 
     private final HttpClient httpClient;

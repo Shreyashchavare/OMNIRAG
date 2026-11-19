@@ -3,6 +3,7 @@ package com.omragul.processing.client.impl;
 import com.omragul.processing.client.KnowledgeServiceClient;
 import com.omragul.processing.client.dto.DocumentDto;
 import com.omragul.processing.exception.DownstreamServiceException;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
@@ -16,19 +17,34 @@ import org.springframework.web.client.RestClient;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
 @Component
 public class KnowledgeServiceClientImpl implements KnowledgeServiceClient {
 
+    private static final Set<String> FORBIDDEN_DEFAULTS = Set.of(
+            "omragul-internal-service-secret-v2",
+            "omragul-internal-dev-secret-v2",
+            "changeme",
+            "secret",
+            "password",
+            "default",
+            "placeholder",
+            "replace_with_a_strong_random_secret"
+    );
+
     private final RestClient restClient;
+    private final String internalSecret;
 
     public KnowledgeServiceClientImpl(
             @Value("${processing.knowledge-service.url:http://localhost:8082}") String baseUrl,
+            @Value("${processing.knowledge-service.secret:}") String internalSecret,
             @Value("${processing.orchestration.connect-timeout-ms:5000}") int connectTimeoutMs,
             @Value("${processing.orchestration.read-timeout-ms:30000}") int readTimeoutMs
     ) {
+        this.internalSecret = internalSecret;
         HttpClient httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(connectTimeoutMs))
                 .build();
@@ -41,12 +57,27 @@ public class KnowledgeServiceClientImpl implements KnowledgeServiceClient {
                 .build();
     }
 
+    @PostConstruct
+    public void validateConfiguration() {
+        if (internalSecret == null || internalSecret.isBlank()) {
+            throw new IllegalStateException(
+                    "INTERNAL_SERVICE_SECRET configuration is missing or blank for Processing Service. Application startup aborted."
+            );
+        }
+        if (FORBIDDEN_DEFAULTS.contains(internalSecret.trim().toLowerCase())) {
+            throw new IllegalStateException(
+                    "INTERNAL_SERVICE_SECRET is set to an insecure or known development default for Processing Service. Application startup aborted."
+            );
+        }
+    }
+
     @Override
     public Optional<DocumentDto> getDocument(UUID documentId) {
         log.debug("Calling Knowledge Service GET /api/v1/documents/{}", documentId);
         try {
             DocumentDto document = restClient.get()
                     .uri("/api/v1/documents/{id}", documentId)
+                    .header("X-Internal-Secret", internalSecret)
                     .retrieve()
                     .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
                         if (res.getStatusCode().value() == 404) {
@@ -82,6 +113,7 @@ public class KnowledgeServiceClientImpl implements KnowledgeServiceClient {
         try {
             restClient.patch()
                     .uri("/api/v1/documents/{id}/processing-status/{status}", documentId, status)
+                    .header("X-Internal-Secret", internalSecret)
                     .retrieve()
                     .toBodilessEntity();
             log.info("Successfully synchronized document {} status to {}", documentId, status);

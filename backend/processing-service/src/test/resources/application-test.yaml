@@ -28,6 +28,7 @@ spring:
 processing:
   knowledge-service:
     url: http://localhost:8082
+    secret: test-internal-secret
   multimodal-service:
     url: http://localhost:8003
   embedding-service:

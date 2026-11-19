@@ -1,6 +1,8 @@
 package com.omragul.knowledge.service.impl;
 
 import com.omragul.knowledge.entity.FolderPermission;
+import com.omragul.knowledge.exception.DuplicateResourceException;
+import com.omragul.knowledge.exception.ResourceNotFoundException;
 import com.omragul.knowledge.repository.FolderPermissionRepository;
 import com.omragul.knowledge.service.FolderPermissionService;
 import org.springframework.stereotype.Service;
@@ -40,7 +42,7 @@ public class FolderPermissionServiceImpl
                         permission
                 )) {
 
-            throw new RuntimeException(
+            throw new DuplicateResourceException(
                     "Permission already granted"
             );
         }
@@ -154,7 +156,7 @@ public class FolderPermissionServiceImpl
             UUID permissionId
     ) {
         if (!permissionRepository.existsById(permissionId)) {
-            throw new RuntimeException(
+            throw new ResourceNotFoundException(
                     "Folder permission not found: "
                             + permissionId
             );

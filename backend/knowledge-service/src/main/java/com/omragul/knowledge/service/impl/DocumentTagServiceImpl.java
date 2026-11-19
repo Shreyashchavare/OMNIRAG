@@ -1,6 +1,8 @@
 package com.omragul.knowledge.service.impl;
 
 import com.omragul.knowledge.entity.DocumentTag;
+import com.omragul.knowledge.exception.DuplicateResourceException;
+import com.omragul.knowledge.exception.ResourceNotFoundException;
 import com.omragul.knowledge.repository.DocumentTagRepository;
 import com.omragul.knowledge.service.DocumentTagService;
 import org.springframework.stereotype.Service;
@@ -36,7 +38,7 @@ public class DocumentTagServiceImpl
                         tagId
                 )) {
 
-            throw new RuntimeException(
+            throw new DuplicateResourceException(
                     "Tag is already assigned to document"
             );
         }
@@ -96,7 +98,7 @@ public class DocumentTagServiceImpl
                         tagId
                 )) {
 
-            throw new RuntimeException(
+            throw new ResourceNotFoundException(
                     "Tag is not assigned to document"
             );
         }

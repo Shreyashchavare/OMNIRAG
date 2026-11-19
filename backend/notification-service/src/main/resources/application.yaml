@@ -6,9 +6,9 @@ spring:
     name: notification-service
 
   datasource:
-    url: ${NOTIFICATION_DB_URL}
-    username: ${NOTIFICATION_DB_USERNAME}
-    password: ${NOTIFICATION_DB_PASSWORD}
+    url: ${NOTIFICATION_DB_URL:${NOTIFICATION_DATASOURCE_URL:${SPRING_DATASOURCE_URL}}}
+    username: ${NOTIFICATION_DB_USERNAME:${SPRING_DATASOURCE_USERNAME}}
+    password: ${NOTIFICATION_DB_PASSWORD:${SPRING_DATASOURCE_PASSWORD}}
     driver-class-name: org.postgresql.Driver
 
   jpa:

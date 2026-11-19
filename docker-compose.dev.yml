@@ -25,6 +25,7 @@ services:
       - "127.0.0.1:${GATEWAY_PORT:-8080}:8080"
     restart: unless-stopped
     environment:
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
       IDENTITY_SERVICE_URL: http://identity-service:8080
       KNOWLEDGE_SERVICE_URL: http://knowledge-service:8080
@@ -57,6 +58,7 @@ services:
       retries: 5
       start_period: 25s
     environment:
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
       SERVER_PORT: 8080
 
@@ -91,6 +93,8 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      SERVER_PORT: "8080"
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
       SPRING_DATASOURCE_URL: ${KNOWLEDGE_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/knowledge_db}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
@@ -118,6 +122,7 @@ services:
       knowledge-service:
         condition: service_started
     environment:
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
       PROCESSING_SERVER_PORT: "8080"
       PROCESSING_DB_URL: ${PROCESSING_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/processing_db}
@@ -144,6 +149,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
       ANALYTICS_DB_URL: ${ANALYTICS_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/analytics_db}
       ANALYTICS_DB_USERNAME: ${POSTGRES_USER}
@@ -163,6 +169,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
       NOTIFICATION_DB_URL: ${NOTIFICATION_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/notification_db}
       NOTIFICATION_DB_USERNAME: ${POSTGRES_USER}

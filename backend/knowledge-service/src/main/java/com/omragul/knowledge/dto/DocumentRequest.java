@@ -34,7 +34,6 @@ public class DocumentRequest {
 
     private String checksum;
 
-    @NotNull
     private UUID ownerId;
 
     public UUID getKnowledgeBaseId() {

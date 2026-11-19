@@ -1,6 +1,9 @@
 package com.omragul.knowledge.service;
 
 import com.omragul.knowledge.entity.KnowledgeBase;
+import com.omragul.knowledge.exception.DuplicateResourceException;
+import com.omragul.knowledge.exception.ResourceNotFoundException;
+import com.omragul.knowledge.exception.UnauthorizedException;
 import com.omragul.knowledge.repository.KnowledgeBaseRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,19 +49,22 @@ public class KnowledgeBaseService {
             );
         }
 
-        if (knowledgeBase.getSlug() == null
-                || knowledgeBase.getSlug().isBlank()) {
-
-            throw new IllegalArgumentException(
-                    "Knowledge base slug is required"
-            );
-        }
-
-        if (knowledgeBaseRepository.existsBySlug(
+        if (knowledgeBase.getSlug() == null || knowledgeBase.getSlug().isBlank()) {
+            String generatedSlug = knowledgeBase.getName().trim().toLowerCase()
+                    .replaceAll("[^a-z0-9]+", "-")
+                    .replaceAll("^-|-$", "");
+            if (generatedSlug.isBlank()) {
+                generatedSlug = "kb-" + UUID.randomUUID().toString().substring(0, 8);
+            }
+            if (knowledgeBaseRepository.existsBySlug(generatedSlug)) {
+                generatedSlug = generatedSlug + "-" + UUID.randomUUID().toString().substring(0, 6);
+            }
+            knowledgeBase.setSlug(generatedSlug);
+        } else if (knowledgeBaseRepository.existsBySlug(
                 knowledgeBase.getSlug())) {
 
-            throw new IllegalArgumentException(
-                    "Knowledge base slug already exists"
+            throw new DuplicateResourceException(
+                    "Knowledge base slug already exists: " + knowledgeBase.getSlug()
             );
         }
 
@@ -66,8 +72,8 @@ public class KnowledgeBaseService {
                 knowledgeBase.getName(),
                 userId)) {
 
-            throw new IllegalArgumentException(
-                    "Knowledge base with this name already exists"
+            throw new DuplicateResourceException(
+                    "Knowledge base with this name already exists: " + knowledgeBase.getName()
             );
         }
 
@@ -93,6 +99,35 @@ public class KnowledgeBaseService {
     }
 
     @Transactional(readOnly = true)
+    public KnowledgeBase getById(UUID id, UUID userId) {
+        if (id == null) {
+            throw new IllegalArgumentException(
+                    "Knowledge base ID cannot be null"
+            );
+        }
+
+        if (userId == null) {
+            throw new UnauthorizedException("Authenticated user ID is required");
+        }
+
+        KnowledgeBase knowledgeBase = knowledgeBaseRepository.findById(id)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Knowledge base not found: " + id
+                        )
+                );
+
+        if (knowledgeBase.getVisibility() == KnowledgeBase.Visibility.PRIVATE
+                && !knowledgeBase.getOwnerId().equals(userId)) {
+            throw new UnauthorizedException(
+                    "User does not have access to private knowledge base: " + id
+            );
+        }
+
+        return knowledgeBase;
+    }
+
+    @Transactional(readOnly = true)
     public KnowledgeBase getById(UUID id) {
 
         if (id == null) {
@@ -103,10 +138,25 @@ public class KnowledgeBaseService {
 
         return knowledgeBaseRepository.findById(id)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
+                        new ResourceNotFoundException(
                                 "Knowledge base not found: " + id
                         )
                 );
+    }
+
+    @Transactional(readOnly = true)
+    public KnowledgeBase getActiveById(UUID id, UUID userId) {
+        KnowledgeBase knowledgeBase = getById(id, userId);
+
+        if (knowledgeBase.getStatus()
+                != KnowledgeBase.Status.ACTIVE) {
+
+            throw new IllegalArgumentException(
+                    "Knowledge base is not active"
+            );
+        }
+
+        return knowledgeBase;
     }
 
     @Transactional(readOnly = true)
@@ -142,6 +192,36 @@ public class KnowledgeBaseService {
     }
 
     @Transactional(readOnly = true)
+    public KnowledgeBase getBySlug(String slug, UUID userId) {
+        if (slug == null || slug.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Slug cannot be null or blank"
+            );
+        }
+
+        if (userId == null) {
+            throw new UnauthorizedException("Authenticated user ID is required");
+        }
+
+        KnowledgeBase knowledgeBase = knowledgeBaseRepository.findBySlug(slug)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Knowledge base not found with slug: "
+                                        + slug
+                        )
+                );
+
+        if (knowledgeBase.getVisibility() == KnowledgeBase.Visibility.PRIVATE
+                && !knowledgeBase.getOwnerId().equals(userId)) {
+            throw new UnauthorizedException(
+                    "User does not have access to private knowledge base: " + slug
+            );
+        }
+
+        return knowledgeBase;
+    }
+
+    @Transactional(readOnly = true)
     public KnowledgeBase getBySlug(String slug) {
 
         if (slug == null || slug.isBlank()) {
@@ -152,7 +232,7 @@ public class KnowledgeBaseService {
 
         return knowledgeBaseRepository.findBySlug(slug)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
+                        new ResourceNotFoundException(
                                 "Knowledge base not found with slug: "
                                         + slug
                         )
@@ -177,7 +257,7 @@ public class KnowledgeBaseService {
                 getActiveById(id);
 
         if (!knowledgeBase.getOwnerId().equals(userId)) {
-            throw new IllegalArgumentException(
+            throw new UnauthorizedException(
                     "User is not the owner of this knowledge base"
             );
         }
@@ -191,8 +271,8 @@ public class KnowledgeBaseService {
                             userId
                     )) {
 
-                throw new IllegalArgumentException(
-                        "Knowledge base with this name already exists"
+                throw new DuplicateResourceException(
+                        "Knowledge base with this name already exists: " + name
                 );
             }
 
@@ -208,8 +288,8 @@ public class KnowledgeBaseService {
 
             if (knowledgeBaseRepository.existsBySlug(slug)) {
 
-                throw new IllegalArgumentException(
-                        "Knowledge base slug already exists"
+                throw new DuplicateResourceException(
+                        "Knowledge base slug already exists: " + slug
                 );
             }
 
@@ -237,7 +317,7 @@ public class KnowledgeBaseService {
                 getActiveById(id);
 
         if (!knowledgeBase.getOwnerId().equals(userId)) {
-            throw new IllegalArgumentException(
+            throw new UnauthorizedException(
                     "User is not the owner of this knowledge base"
             );
         }
@@ -269,7 +349,7 @@ public class KnowledgeBaseService {
                 getById(id);
 
         if (!knowledgeBase.getOwnerId().equals(userId)) {
-            throw new IllegalArgumentException(
+            throw new UnauthorizedException(
                     "User is not the owner of this knowledge base"
             );
         }
@@ -295,12 +375,25 @@ public class KnowledgeBaseService {
 
 
     }
+
     @Transactional
     public KnowledgeBase restore(UUID id) {
+        throw new UnauthorizedException("Authenticated user ID is required");
+    }
+
+    @Transactional
+    public KnowledgeBase restore(UUID id, UUID userId) {
+        if (userId == null) {
+            throw new UnauthorizedException("Authenticated user ID is required");
+        }
 
         KnowledgeBase knowledgeBase = knowledgeBaseRepository.findById(id)
                 .orElseThrow(() ->
-                        new IllegalArgumentException("Knowledge base not found"));
+                        new ResourceNotFoundException("Knowledge base not found: " + id));
+
+        if (!knowledgeBase.getOwnerId().equals(userId)) {
+            throw new UnauthorizedException("User is not the owner of this knowledge base");
+        }
 
         if (knowledgeBase.getStatus() != KnowledgeBase.Status.ARCHIVED) {
             throw new IllegalArgumentException(

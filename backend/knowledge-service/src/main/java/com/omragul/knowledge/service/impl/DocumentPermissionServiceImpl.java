@@ -1,6 +1,8 @@
 package com.omragul.knowledge.service.impl;
 
 import com.omragul.knowledge.entity.DocumentPermission;
+import com.omragul.knowledge.exception.DuplicateResourceException;
+import com.omragul.knowledge.exception.ResourceNotFoundException;
 import com.omragul.knowledge.repository.DocumentPermissionRepository;
 import com.omragul.knowledge.service.DocumentPermissionService;
 import org.springframework.stereotype.Service;
@@ -40,7 +42,7 @@ public class DocumentPermissionServiceImpl
                         permission
                 )) {
 
-            throw new RuntimeException(
+            throw new DuplicateResourceException(
                     "Permission already granted"
             );
         }
@@ -155,7 +157,7 @@ public class DocumentPermissionServiceImpl
             UUID permissionId
     ) {
         if (!permissionRepository.existsById(permissionId)) {
-            throw new RuntimeException(
+            throw new ResourceNotFoundException(
                     "Document permission not found: "
                             + permissionId
             );
