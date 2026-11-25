@@ -5,6 +5,7 @@ import com.omragul.processing.client.dto.BatchEmbeddingRequestDto;
 import com.omragul.processing.client.dto.BatchEmbeddingResponseDto;
 import com.omragul.processing.exception.DownstreamServiceException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -20,12 +21,16 @@ import java.util.List;
 public class EmbeddingServiceClientImpl implements EmbeddingServiceClient {
 
     private final RestClient restClient;
+    private final String internalSecret;
 
+    @Autowired
     public EmbeddingServiceClientImpl(
-            @Value("${processing.embedding-service.url:http://localhost:8003}") String baseUrl,
-            @Value("${processing.orchestration.connect-timeout-ms:5000}") int connectTimeoutMs,
-            @Value("${processing.orchestration.read-timeout-ms:30000}") int readTimeoutMs
+            @Value("${processing.embedding-service.url:http://localhost:8001}") String baseUrl,
+            @Value("${processing.orchestration.connect-timeout-ms:1000}") int connectTimeoutMs,
+            @Value("${processing.embedding-service.read-timeout-ms:${processing.orchestration.ai-read-timeout-ms:30000}}") int readTimeoutMs,
+            @Value("${internal.service.secret:}") String internalSecret
     ) {
+        this.internalSecret = internalSecret;
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
         requestFactory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
@@ -36,10 +41,23 @@ public class EmbeddingServiceClientImpl implements EmbeddingServiceClient {
                 .build();
     }
 
+    public EmbeddingServiceClientImpl(
+            @Value("${processing.embedding-service.url:http://localhost:8001}") String baseUrl,
+            @Value("${processing.orchestration.connect-timeout-ms:1000}") int connectTimeoutMs,
+            @Value("${processing.embedding-service.read-timeout-ms:${processing.orchestration.ai-read-timeout-ms:30000}}") int readTimeoutMs
+    ) {
+        this(baseUrl, connectTimeoutMs, readTimeoutMs, "");
+    }
+
     @Override
     public BatchEmbeddingResponseDto generateBatchEmbeddings(List<String> texts) {
         if (texts == null || texts.isEmpty()) {
             return BatchEmbeddingResponseDto.builder().build();
+        }
+
+        if (internalSecret == null || internalSecret.isBlank()) {
+            log.error("INTERNAL_SERVICE_SECRET configuration is missing for EmbeddingServiceClient");
+            throw new IllegalStateException("INTERNAL_SERVICE_SECRET is not configured for EmbeddingServiceClient");
         }
 
         log.info("Calling Embedding Service POST /api/v1/embeddings/batch for {} texts", texts.size());
@@ -47,6 +65,9 @@ public class EmbeddingServiceClientImpl implements EmbeddingServiceClient {
             BatchEmbeddingResponseDto response = restClient.post()
                     .uri("/api/v1/embeddings/batch")
                     .contentType(MediaType.APPLICATION_JSON)
+                    .header("X-Internal-Service-Secret", internalSecret)
+                    .header("X-Internal-Secret", internalSecret)
+                    .header("X-Internal-Caller-Service", "processing-service")
                     .body(new BatchEmbeddingRequestDto(texts))
                     .retrieve()
                     .body(BatchEmbeddingResponseDto.class);
@@ -59,16 +80,16 @@ public class EmbeddingServiceClientImpl implements EmbeddingServiceClient {
             throw e;
         } catch (org.springframework.web.client.HttpClientErrorException e) {
             log.error("Client error from Embedding Service: {} - {}", e.getStatusCode(), e.getMessage());
-            throw new DownstreamServiceException("embedding-service", e.getStatusCode().value(), e.getResponseBodyAsString());
+            throw DownstreamServiceException.fromHttpClientErrorException("embedding-service", e);
         } catch (org.springframework.web.client.HttpServerErrorException e) {
             log.error("Server error from Embedding Service: {} - {}", e.getStatusCode(), e.getMessage());
-            throw new DownstreamServiceException("embedding-service", e.getStatusCode().value(), e.getResponseBodyAsString());
+            throw DownstreamServiceException.fromHttpServerErrorException("embedding-service", e);
         } catch (ResourceAccessException e) {
             log.error("Network/timeout error connecting to Embedding Service: {}", e.getMessage());
-            throw new DownstreamServiceException("embedding-service", "Network failure connecting to Embedding Service", e);
+            throw DownstreamServiceException.fromResourceAccessException("embedding-service", e);
         } catch (Exception e) {
             log.error("Error generating embeddings: {}", e.getMessage());
-            throw new DownstreamServiceException("embedding-service", "Failed to generate embeddings", e);
+            throw DownstreamServiceException.fromMalformedResponse("embedding-service", "Failed to generate embeddings", e);
         }
     }
 }

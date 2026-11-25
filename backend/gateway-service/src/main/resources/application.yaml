@@ -8,6 +8,10 @@ spring:
     property-naming-strategy: SNAKE_CASE
 
 gateway:
+  internal-service-secret: ${INTERNAL_SERVICE_SECRET:}
+  assertion:
+    private-key-path: ${GATEWAY_ASSERTION_PRIVATE_KEY_PATH:}
+    enabled: ${GATEWAY_ASSERTION_ENABLED:true}
   services:
     identity:
       url: ${IDENTITY_SERVICE_URL}

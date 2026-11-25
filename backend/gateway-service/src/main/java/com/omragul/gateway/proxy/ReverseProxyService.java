@@ -6,6 +6,7 @@ import com.omragul.gateway.security.JwtAuthenticationFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -56,21 +57,36 @@ public class ReverseProxyService {
             "x-user-roles",
             "x-user-role",
             "x-user-email",
-            "x-user-name"
+            "x-user-name",
+            "x-gateway-assertion",
+            "x-gateway-signature"
     );
 
     private final HttpClient httpClient;
     private final GatewayProperties gatewayProperties;
     private final ObjectMapper objectMapper;
+    private final com.omragul.gateway.security.GatewayAssertionService gatewayAssertionService;
 
-    public ReverseProxyService(GatewayProperties gatewayProperties, ObjectMapper objectMapper) {
+    @Autowired
+    public ReverseProxyService(
+            GatewayProperties gatewayProperties,
+            ObjectMapper objectMapper,
+            com.omragul.gateway.security.GatewayAssertionService gatewayAssertionService
+    ) {
         this.gatewayProperties = gatewayProperties;
         this.objectMapper = objectMapper;
+        this.gatewayAssertionService = (gatewayAssertionService != null)
+                ? gatewayAssertionService
+                : new com.omragul.gateway.security.GatewayAssertionService(gatewayProperties);
         this.httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofMillis(gatewayProperties.getHttp().getConnectTimeoutMs()))
                 .followRedirects(HttpClient.Redirect.NEVER)
                 .build();
+    }
+
+    public ReverseProxyService(GatewayProperties gatewayProperties, ObjectMapper objectMapper) {
+        this(gatewayProperties, objectMapper, new com.omragul.gateway.security.GatewayAssertionService(gatewayProperties));
     }
 
     /**
@@ -171,10 +187,24 @@ public class ReverseProxyService {
 
         // Propagate authenticated user context headers (extracted from verified JWT)
         Object userId = request.getAttribute(JwtAuthenticationFilter.ATTR_USER_ID);
-        if (userId != null) {
-            safeSetHeader(requestBuilder, "X-User-Id", userId.toString());
-        }
         Object userRoles = request.getAttribute(JwtAuthenticationFilter.ATTR_USER_ROLES);
+        if (userId != null) {
+            String rolesStr = (userRoles != null) ? userRoles.toString() : "";
+            String downstreamPath = targetUri.normalize().getPath();
+            if (targetUri.getPath() != null && targetUri.getPath().endsWith("/") && !downstreamPath.endsWith("/")) {
+                downstreamPath = downstreamPath + "/";
+            }
+            String assertion = gatewayAssertionService.createAssertion(
+                    userId.toString(), rolesStr, requestId, serviceName, method, downstreamPath);
+            if (assertion == null || assertion.isBlank()) {
+                log.error("Failed to generate required gateway assertion for user {} targeting service '{}'", userId, serviceName);
+                sendError(response, HttpStatus.INTERNAL_SERVER_ERROR.value(), "INTERNAL_SERVER_ERROR",
+                        "Failed to generate downstream authorization assertion", request.getRequestURI());
+                return;
+            }
+            safeSetHeader(requestBuilder, "X-User-Id", userId.toString());
+            safeSetHeader(requestBuilder, "X-Gateway-Assertion", assertion);
+        }
         if (userRoles != null) {
             safeSetHeader(requestBuilder, "X-User-Roles", userRoles.toString());
         }

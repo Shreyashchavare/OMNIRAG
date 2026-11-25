@@ -1,27 +1,39 @@
 package com.omragul.knowledge.service;
 
+import com.omragul.knowledge.client.RagServiceClient;
 import com.omragul.knowledge.entity.KnowledgeBase;
 import com.omragul.knowledge.exception.DuplicateResourceException;
 import com.omragul.knowledge.exception.ResourceNotFoundException;
 import com.omragul.knowledge.exception.UnauthorizedException;
 import com.omragul.knowledge.repository.KnowledgeBaseRepository;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @Transactional
 public class KnowledgeBaseService {
 
     private final KnowledgeBaseRepository knowledgeBaseRepository;
+    private RagServiceClient ragServiceClient;
 
     public KnowledgeBaseService(
             KnowledgeBaseRepository knowledgeBaseRepository
     ) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
+    }
+
+    @Autowired(required = false)
+    public void setRagServiceClient(RagServiceClient ragServiceClient) {
+        this.ragServiceClient = ragServiceClient;
     }
 
     public KnowledgeBase create(
@@ -117,6 +129,10 @@ public class KnowledgeBaseService {
                         )
                 );
 
+        if (knowledgeBase.getStatus() == KnowledgeBase.Status.DELETED) {
+            throw new ResourceNotFoundException("Knowledge base not found: " + id);
+        }
+
         if (knowledgeBase.getVisibility() == KnowledgeBase.Visibility.PRIVATE
                 && !knowledgeBase.getOwnerId().equals(userId)) {
             throw new UnauthorizedException(
@@ -210,6 +226,10 @@ public class KnowledgeBaseService {
                                         + slug
                         )
                 );
+
+        if (knowledgeBase.getStatus() == KnowledgeBase.Status.DELETED) {
+            throw new ResourceNotFoundException("Knowledge base not found with slug: " + slug);
+        }
 
         if (knowledgeBase.getVisibility() == KnowledgeBase.Visibility.PRIVATE
                 && !knowledgeBase.getOwnerId().equals(userId)) {
@@ -369,9 +389,32 @@ public class KnowledgeBaseService {
                 knowledgeBase.getVersion() + 1
         );
 
-        return knowledgeBaseRepository.save(
+        KnowledgeBase saved = knowledgeBaseRepository.save(
                 knowledgeBase
         );
+
+        if (ragServiceClient != null) {
+            if (TransactionSynchronizationManager.isActualTransactionActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        try {
+                            ragServiceClient.deleteKnowledgeBaseVectors(id);
+                        } catch (Exception e) {
+                            log.warn("Failed to synchronize vector deletion for KB {} after transaction commit: {}", id, e.getMessage());
+                        }
+                    }
+                });
+            } else {
+                try {
+                    ragServiceClient.deleteKnowledgeBaseVectors(id);
+                } catch (Exception e) {
+                    log.warn("Failed to synchronize vector deletion for KB {}: {}", id, e.getMessage());
+                }
+            }
+        }
+
+        return saved;
 
 
     }

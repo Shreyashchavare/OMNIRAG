@@ -30,6 +30,9 @@ public class ProcessingJobResponse {
     @Schema(description = "Knowledge Base UUID")
     private UUID knowledgeBaseId;
 
+    @Schema(description = "Owner User UUID")
+    private UUID ownerId;
+
     @Schema(description = "Current lifecycle status")
     private ProcessingStatus status;
 
@@ -74,6 +77,7 @@ public class ProcessingJobResponse {
                 .id(job.getId())
                 .documentId(job.getDocumentId())
                 .knowledgeBaseId(job.getKnowledgeBaseId())
+                .ownerId(job.getOwnerId())
                 .status(job.getStatus())
                 .stage(job.getStage())
                 .currentStep(job.getCurrentStep())

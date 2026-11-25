@@ -361,4 +361,65 @@ class DocumentServiceAuthorizationTest {
         assertNotNull(docs);
         assertEquals(1, docs.size());
     }
+
+    @Test
+    @DisplayName("hasDocumentWriteAccess - returns true for document owner")
+    void testHasDocumentWriteAccess_DocumentOwner() {
+        when(documentRepository.findById(docId)).thenReturn(Optional.of(testDoc));
+        assertTrue(documentService.hasDocumentWriteAccess(docId, ownerId));
+    }
+
+    @Test
+    @DisplayName("hasDocumentWriteAccess - returns true for collaborator with WRITE permission")
+    void testHasDocumentWriteAccess_CollaboratorWritePermission() {
+        when(documentRepository.findById(docId)).thenReturn(Optional.of(testDoc));
+        when(documentPermissionService.hasPermission(docId, attackerId, DocumentPermission.Permission.WRITE)).thenReturn(true);
+        assertTrue(documentService.hasDocumentWriteAccess(docId, attackerId));
+    }
+
+    @Test
+    @DisplayName("hasDocumentWriteAccess - returns false for collaborator with READ only permission")
+    void testHasDocumentWriteAccess_CollaboratorReadOnlyPermission() {
+        when(documentRepository.findById(docId)).thenReturn(Optional.of(testDoc));
+        when(documentPermissionService.hasPermission(docId, attackerId, DocumentPermission.Permission.WRITE)).thenReturn(false);
+        when(documentPermissionService.hasPermission(docId, attackerId, DocumentPermission.Permission.OWNER)).thenReturn(false);
+        when(knowledgeBaseRepository.findById(kbId)).thenReturn(Optional.of(privateKb));
+
+        assertFalse(documentService.hasDocumentWriteAccess(docId, attackerId));
+    }
+
+    @Test
+    @DisplayName("hasDocumentWriteAccess - returns true for KB owner on document")
+    void testHasDocumentWriteAccess_KbOwner() {
+        UUID kbOwnerId = UUID.randomUUID();
+        KnowledgeBase kb = new KnowledgeBase();
+        kb.setId(kbId);
+        kb.setOwnerId(kbOwnerId);
+
+        when(documentRepository.findById(docId)).thenReturn(Optional.of(testDoc));
+        when(documentPermissionService.hasPermission(docId, kbOwnerId, DocumentPermission.Permission.WRITE)).thenReturn(false);
+        when(documentPermissionService.hasPermission(docId, kbOwnerId, DocumentPermission.Permission.OWNER)).thenReturn(false);
+        when(knowledgeBaseRepository.findById(kbId)).thenReturn(Optional.of(kb));
+
+        assertTrue(documentService.hasDocumentWriteAccess(docId, kbOwnerId));
+    }
+
+    @Test
+    @DisplayName("hasDocumentWriteAccess - safely handles ownerless historical document")
+    void testHasDocumentWriteAccess_OwnerlessDocumentSafe() {
+        Document ownerlessDoc = new Document();
+        ownerlessDoc.setId(docId);
+        ownerlessDoc.setKnowledgeBaseId(kbId);
+        ownerlessDoc.setOwnerId(null); // ownerless
+
+        when(documentRepository.findById(docId)).thenReturn(Optional.of(ownerlessDoc));
+        when(documentPermissionService.hasPermission(docId, attackerId, DocumentPermission.Permission.WRITE)).thenReturn(false);
+        when(documentPermissionService.hasPermission(docId, attackerId, DocumentPermission.Permission.OWNER)).thenReturn(false);
+        when(knowledgeBaseRepository.findById(kbId)).thenReturn(Optional.of(privateKb));
+
+        assertDoesNotThrow(() -> {
+            boolean hasAccess = documentService.hasDocumentWriteAccess(docId, attackerId);
+            assertFalse(hasAccess);
+        });
+    }
 }

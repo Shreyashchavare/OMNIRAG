@@ -79,6 +79,7 @@ class ReverseProxyServiceTest {
         try {
             int port = server.getAddress().getPort();
             GatewayProperties properties = new GatewayProperties();
+            properties.getAssertion().setEnabled(false);
             ReverseProxyService proxyService = new ReverseProxyService(properties, objectMapper);
 
             MockHttpServletRequest request = new MockHttpServletRequest("GET", "/test");
@@ -120,6 +121,7 @@ class ReverseProxyServiceTest {
         try {
             int port = server.getAddress().getPort();
             GatewayProperties properties = new GatewayProperties();
+            properties.getAssertion().setEnabled(false);
             ReverseProxyService proxyService = new ReverseProxyService(properties, objectMapper);
 
             MockHttpServletRequest request = new MockHttpServletRequest("GET", "/untrusted-identity");
@@ -138,15 +140,17 @@ class ReverseProxyServiceTest {
     }
 
     @Test
-    @DisplayName("Forward sets verified identity headers from verified JWT attributes")
+    @DisplayName("Forward sets verified identity headers and signed Gateway assertion from verified JWT attributes")
     void testForwardPropagatesVerifiedIdentityHeaders() throws Exception {
         java.util.concurrent.atomic.AtomicReference<String> forwardedUserId = new java.util.concurrent.atomic.AtomicReference<>();
         java.util.concurrent.atomic.AtomicReference<String> forwardedRoles = new java.util.concurrent.atomic.AtomicReference<>();
+        java.util.concurrent.atomic.AtomicReference<String> forwardedAssertion = new java.util.concurrent.atomic.AtomicReference<>();
 
         HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/verified-identity", exchange -> {
             forwardedUserId.set(exchange.getRequestHeaders().getFirst("X-User-Id"));
             forwardedRoles.set(exchange.getRequestHeaders().getFirst("X-User-Roles"));
+            forwardedAssertion.set(exchange.getRequestHeaders().getFirst("X-Gateway-Assertion"));
             exchange.sendResponseHeaders(200, 0);
             exchange.getResponseBody().close();
         });
@@ -155,7 +159,12 @@ class ReverseProxyServiceTest {
         try {
             int port = server.getAddress().getPort();
             GatewayProperties properties = new GatewayProperties();
-            ReverseProxyService proxyService = new ReverseProxyService(properties, objectMapper);
+            java.security.KeyPairGenerator kpg = java.security.KeyPairGenerator.getInstance("RSA");
+            kpg.initialize(2048);
+            java.security.KeyPair keyPair = kpg.generateKeyPair();
+            com.omragul.gateway.security.GatewayAssertionService assertionService =
+                    new com.omragul.gateway.security.GatewayAssertionService(keyPair.getPrivate());
+            ReverseProxyService proxyService = new ReverseProxyService(properties, objectMapper, assertionService);
 
             UUID verifiedId = UUID.randomUUID();
             MockHttpServletRequest request = new MockHttpServletRequest("GET", "/verified-identity");
@@ -168,6 +177,89 @@ class ReverseProxyServiceTest {
             assertThat(response.getStatus()).isEqualTo(200);
             assertThat(forwardedUserId.get()).isEqualTo(verifiedId.toString());
             assertThat(forwardedRoles.get()).isEqualTo("ROLE_USER");
+            assertThat(forwardedAssertion.get()).as("X-Gateway-Assertion must be generated and forwarded").isNotNull();
+            String[] assertionParts = forwardedAssertion.get().split("\\.");
+            assertThat(assertionParts).hasSize(3);
+
+            io.jsonwebtoken.Claims assertionClaims = io.jsonwebtoken.Jwts.parser()
+                    .verifyWith(keyPair.getPublic())
+                    .requireIssuer("gateway-service")
+                    .build()
+                    .parseSignedClaims(forwardedAssertion.get())
+                    .getPayload();
+            assertThat(assertionClaims.getSubject()).isEqualTo(verifiedId.toString());
+            assertThat(assertionClaims.get("roles", String.class)).isEqualTo("ROLE_USER");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @DisplayName("Forward strips untrusted client-supplied x-gateway-assertion")
+    void testForwardStripsClientSuppliedGatewayAssertion() throws Exception {
+        AtomicBoolean assertionReceived = new AtomicBoolean(false);
+
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/strip-assertion", exchange -> {
+            if (exchange.getRequestHeaders().containsKey("x-gateway-assertion")) {
+                assertionReceived.set(true);
+            }
+            exchange.sendResponseHeaders(200, 0);
+            exchange.getResponseBody().close();
+        });
+        server.start();
+
+        try {
+            int port = server.getAddress().getPort();
+            GatewayProperties properties = new GatewayProperties();
+            properties.getAssertion().setEnabled(false);
+            ReverseProxyService proxyService = new ReverseProxyService(properties, objectMapper);
+
+            MockHttpServletRequest request = new MockHttpServletRequest("GET", "/strip-assertion");
+            request.addHeader("x-gateway-assertion", "forged.gateway.assertion");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+
+            proxyService.forward("test-service", "http://127.0.0.1:" + port, "/strip-assertion", request, response);
+
+            assertThat(response.getStatus()).isEqualTo(200);
+            assertThat(assertionReceived.get()).as("Client-supplied x-gateway-assertion must be stripped").isFalse();
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @DisplayName("Forward aborts with 500 when assertion generation returns null for authenticated user")
+    void testForwardAbortsWhenAssertionReturnsNull() throws Exception {
+        AtomicBoolean downstreamCalled = new AtomicBoolean(false);
+
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/authenticated-endpoint", exchange -> {
+            downstreamCalled.set(true);
+            exchange.sendResponseHeaders(200, 0);
+            exchange.getResponseBody().close();
+        });
+        server.start();
+
+        try {
+            int port = server.getAddress().getPort();
+            GatewayProperties properties = new GatewayProperties();
+            // Assertion is disabled, so createAssertion returns null
+            properties.getAssertion().setEnabled(false);
+            ReverseProxyService proxyService = new ReverseProxyService(properties, objectMapper);
+
+            MockHttpServletRequest request = new MockHttpServletRequest("GET", "/authenticated-endpoint");
+            UUID verifiedId = UUID.randomUUID();
+            request.setAttribute(com.omragul.gateway.security.JwtAuthenticationFilter.ATTR_USER_ID, verifiedId);
+            request.setAttribute(com.omragul.gateway.security.JwtAuthenticationFilter.ATTR_USER_ROLES, "ROLE_USER");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+
+            proxyService.forward("test-service", "http://127.0.0.1:" + port, "/authenticated-endpoint", request, response);
+
+            assertThat(response.getStatus()).isEqualTo(500);
+            assertThat(response.getContentAsString()).contains("INTERNAL_SERVER_ERROR");
+            assertThat(response.getContentAsString()).contains("Failed to generate downstream authorization assertion");
+            assertThat(downstreamCalled.get()).as("Downstream service must NOT be called when assertion generation fails").isFalse();
         } finally {
             server.stop(0);
         }

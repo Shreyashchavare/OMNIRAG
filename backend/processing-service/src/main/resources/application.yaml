@@ -25,7 +25,16 @@ spring:
     baseline-on-migrate: true
 
 server:
-  port: ${PROCESSING_SERVER_PORT:${PROCESSING_PORT}}
+  port: ${PROCESSING_SERVER_PORT:${PROCESSING_PORT:8083}}
+
+internal:
+  service:
+    secret: ${INTERNAL_SERVICE_SECRET}
+
+gateway:
+  assertion:
+    public-key-path: ${GATEWAY_ASSERTION_PUBLIC_KEY_PATH:}
+    expected-audience: ${GATEWAY_ASSERTION_EXPECTED_AUDIENCE:processing-service}
 
 springdoc:
   api-docs:
@@ -35,21 +44,39 @@ springdoc:
 
 processing:
   knowledge-service:
-    url: ${KNOWLEDGE_SERVICE_URL}
+    url: ${KNOWLEDGE_SERVICE_URL:http://localhost:8082}
     secret: ${INTERNAL_SERVICE_SECRET}
   multimodal-service:
-    url: ${MULTIMODAL_SERVICE_URL}
+    url: ${MULTIMODAL_SERVICE_URL:http://localhost:8003}
+    read-timeout-ms: ${PROCESSING_MULTIMODAL_READ_TIMEOUT_MS:${PROCESSING_AI_READ_TIMEOUT_MS:30000}}
   embedding-service:
-    url: ${EMBEDDING_SERVICE_URL}
+    url: ${EMBEDDING_SERVICE_URL:http://localhost:8001}
+    read-timeout-ms: ${PROCESSING_EMBEDDING_READ_TIMEOUT_MS:${PROCESSING_AI_READ_TIMEOUT_MS:30000}}
   rag-service:
-    url: ${RAG_SERVICE_URL}
+    url: ${RAG_SERVICE_URL:http://localhost:8002}
+    read-timeout-ms: ${PROCESSING_RAG_READ_TIMEOUT_MS:${PROCESSING_AI_READ_TIMEOUT_MS:30000}}
 
   orchestration:
-    max-attempts: ${PROCESSING_MAX_ATTEMPTS}
-    connect-timeout-ms: ${PROCESSING_CONNECT_TIMEOUT_MS}
-    read-timeout-ms: ${PROCESSING_READ_TIMEOUT_MS}
+    max-attempts: ${PROCESSING_MAX_ATTEMPTS:3}
+    connect-timeout-ms: ${PROCESSING_CONNECT_TIMEOUT_MS:1000}
+    read-timeout-ms: ${PROCESSING_READ_TIMEOUT_MS:5000}
+    ai-read-timeout-ms: ${PROCESSING_AI_READ_TIMEOUT_MS:30000}
+    retry-initial-delay-ms: ${PROCESSING_RETRY_INITIAL_DELAY_MS:2000}
+    retry-max-delay-ms: ${PROCESSING_RETRY_MAX_DELAY_MS:60000}
+    retry-backoff-multiplier: ${PROCESSING_RETRY_BACKOFF_MULTIPLIER:2.0}
+
+  scheduler:
+    pool-size: ${PROCESSING_SCHEDULER_POOL_SIZE:2}
+
+  recovery:
+    watchdog-enabled: ${PROCESSING_WATCHDOG_ENABLED:true}
+    watchdog-interval-ms: ${PROCESSING_WATCHDOG_INTERVAL_MS:60000}
+    watchdog-initial-delay-ms: ${PROCESSING_WATCHDOG_INITIAL_DELAY_MS:30000}
+    stale-processing-threshold-ms: ${PROCESSING_STALE_PROCESSING_THRESHOLD_MS:300000}
+    queued-stale-threshold-ms: ${PROCESSING_QUEUED_STALE_THRESHOLD_MS:120000}
+    batch-size: ${PROCESSING_RECOVERY_BATCH_SIZE:20}
 
   executor:
-    core-pool-size: ${PROCESSING_EXECUTOR_CORE_POOL_SIZE}
-    max-pool-size: ${PROCESSING_EXECUTOR_MAX_POOL_SIZE}
-    queue-capacity: ${PROCESSING_EXECUTOR_QUEUE_CAPACITY}
+    core-pool-size: ${PROCESSING_EXECUTOR_CORE_POOL_SIZE:4}
+    max-pool-size: ${PROCESSING_EXECUTOR_MAX_POOL_SIZE:8}
+    queue-capacity: ${PROCESSING_EXECUTOR_QUEUE_CAPACITY:100}

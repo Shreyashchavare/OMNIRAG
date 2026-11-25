@@ -1,5 +1,6 @@
 package com.omragul.knowledge.service.impl;
 
+import com.omragul.knowledge.client.RagServiceClient;
 import com.omragul.knowledge.entity.Document;
 import com.omragul.knowledge.entity.DocumentPermission;
 import com.omragul.knowledge.entity.KnowledgeBase;
@@ -11,15 +12,21 @@ import com.omragul.knowledge.repository.FolderRepository;
 import com.omragul.knowledge.repository.KnowledgeBaseRepository;
 import com.omragul.knowledge.service.DocumentPermissionService;
 import com.omragul.knowledge.service.DocumentService;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @Transactional
 public class DocumentServiceImpl implements DocumentService {
@@ -29,6 +36,7 @@ public class DocumentServiceImpl implements DocumentService {
     private final DocumentPermissionService documentPermissionService;
     private final FolderRepository folderRepository;
     private final CategoryRepository categoryRepository;
+    private RagServiceClient ragServiceClient;
 
     public DocumentServiceImpl(
             DocumentRepository documentRepository,
@@ -42,6 +50,11 @@ public class DocumentServiceImpl implements DocumentService {
         this.documentPermissionService = documentPermissionService;
         this.folderRepository = folderRepository;
         this.categoryRepository = categoryRepository;
+    }
+
+    @Autowired(required = false)
+    public void setRagServiceClient(RagServiceClient ragServiceClient) {
+        this.ragServiceClient = ragServiceClient;
     }
 
     private KnowledgeBase checkKnowledgeBaseWriteAccess(UUID kbId, UUID userId) {
@@ -87,7 +100,7 @@ public class DocumentServiceImpl implements DocumentService {
             throw new UnauthorizedException("Authenticated user ID is required");
         }
 
-        if (document.getOwnerId().equals(userId)) {
+        if (document.getOwnerId() != null && document.getOwnerId().equals(userId)) {
             return;
         }
 
@@ -115,7 +128,7 @@ public class DocumentServiceImpl implements DocumentService {
             throw new UnauthorizedException("Authenticated user ID is required");
         }
 
-        if (document.getOwnerId().equals(userId)) {
+        if (document.getOwnerId() != null && document.getOwnerId().equals(userId)) {
             return;
         }
 
@@ -137,7 +150,7 @@ public class DocumentServiceImpl implements DocumentService {
             throw new UnauthorizedException("Authenticated user ID is required");
         }
 
-        if (document.getOwnerId().equals(userId)) {
+        if (document.getOwnerId() != null && document.getOwnerId().equals(userId)) {
             return;
         }
 
@@ -158,7 +171,7 @@ public class DocumentServiceImpl implements DocumentService {
             throw new UnauthorizedException("Authenticated user ID is required");
         }
 
-        if (document.getOwnerId().equals(userId)) {
+        if (document.getOwnerId() != null && document.getOwnerId().equals(userId)) {
             return;
         }
 
@@ -485,7 +498,44 @@ public class DocumentServiceImpl implements DocumentService {
         document.setUpdatedAt(LocalDateTime.now());
         document.setVersion(document.getVersion() + 1);
 
-        return documentRepository.save(document);
+        Document saved = documentRepository.save(document);
+
+        if (ragServiceClient != null && document.getKnowledgeBaseId() != null) {
+            UUID kbId = document.getKnowledgeBaseId();
+            if (TransactionSynchronizationManager.isActualTransactionActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        try {
+                            ragServiceClient.deleteDocumentVectors(documentId, kbId);
+                        } catch (Exception e) {
+                            log.warn("Failed to synchronize vector deletion for document {} after transaction commit: {}", documentId, e.getMessage());
+                        }
+                    }
+                });
+            } else {
+                try {
+                    ragServiceClient.deleteDocumentVectors(documentId, kbId);
+                } catch (Exception e) {
+                    log.warn("Failed to synchronize vector deletion for document {}: {}", documentId, e.getMessage());
+                }
+            }
+        }
+
+        return saved;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UUID> getActiveDocumentIds(UUID knowledgeBaseId, Collection<UUID> documentIds) {
+        if (knowledgeBaseId == null || documentIds == null || documentIds.isEmpty()) {
+            return List.of();
+        }
+        return documentRepository.findByKnowledgeBaseIdAndIdInAndStatus(
+                knowledgeBaseId,
+                documentIds,
+                Document.Status.ACTIVE
+        ).stream().map(Document::getId).toList();
     }
 
     @Override
@@ -538,5 +588,40 @@ public class DocumentServiceImpl implements DocumentService {
                 categoryId,
                 Document.Status.ACTIVE
         );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean existsById(UUID documentId) {
+        if (documentId == null) {
+            return false;
+        }
+        return documentRepository.existsById(documentId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean hasDocumentWriteAccess(UUID documentId, UUID userId) {
+        if (userId == null || documentId == null) {
+            return false;
+        }
+        Document document = documentRepository.findById(documentId).orElse(null);
+        if (document == null) {
+            return false;
+        }
+        if (document.getOwnerId() != null && document.getOwnerId().equals(userId)) {
+            return true;
+        }
+        if (documentPermissionService.hasPermission(document.getId(), userId, DocumentPermission.Permission.WRITE)
+                || documentPermissionService.hasPermission(document.getId(), userId, DocumentPermission.Permission.OWNER)) {
+            return true;
+        }
+        if (document.getKnowledgeBaseId() != null) {
+            KnowledgeBase kb = knowledgeBaseRepository.findById(document.getKnowledgeBaseId()).orElse(null);
+            if (kb != null && kb.getOwnerId() != null && kb.getOwnerId().equals(userId)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

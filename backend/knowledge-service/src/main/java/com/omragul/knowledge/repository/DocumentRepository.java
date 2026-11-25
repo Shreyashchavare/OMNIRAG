@@ -27,6 +27,12 @@ public interface DocumentRepository extends JpaRepository<Document, UUID> {
             Document.Status status
     );
 
+    List<Document> findByKnowledgeBaseIdAndIdInAndStatus(
+            UUID knowledgeBaseId,
+            java.util.Collection<UUID> ids,
+            Document.Status status
+    );
+
     Page<Document> findByKnowledgeBaseIdAndStatus(
             UUID knowledgeBaseId,
             Document.Status status,

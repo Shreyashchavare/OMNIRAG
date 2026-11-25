@@ -11,10 +11,12 @@ import org.springframework.context.annotation.Configuration;
 @ConfigurationProperties(prefix = "gateway")
 public class GatewayProperties {
 
+    private String internalServiceSecret;
     private Services services = new Services();
     private Http http = new Http();
     private Cors cors = new Cors();
     private Jwt jwt = new Jwt();
+    private Assertion assertion = new Assertion();
 
     @Getter
     @Setter
@@ -59,5 +61,12 @@ public class GatewayProperties {
     public static class Jwt {
         private String publicKey = "classpath:certs/public_key.pem";
         private String issuer = "http://localhost:8080";
+    }
+
+    @Getter
+    @Setter
+    public static class Assertion {
+        private String privateKeyPath;
+        private boolean enabled = false;
     }
 }

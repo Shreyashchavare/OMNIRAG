@@ -1,6 +1,10 @@
 server:
   port: 0
 
+internal:
+  service:
+    secret: test-internal-secret
+
 spring:
   application:
     name: processing-service-test
@@ -40,6 +44,21 @@ processing:
     max-attempts: 3
     connect-timeout-ms: 1000
     read-timeout-ms: 2000
+    ai-read-timeout-ms: 2000
+    retry-initial-delay-ms: 100
+    retry-max-delay-ms: 2000
+    retry-backoff-multiplier: 2.0
+
+  scheduler:
+    pool-size: 2
+
+  recovery:
+    watchdog-enabled: true
+    watchdog-interval-ms: 60000
+    watchdog-initial-delay-ms: 30000
+    stale-processing-threshold-ms: 300000
+    queued-stale-threshold-ms: 120000
+    batch-size: 20
 
   executor:
     core-pool-size: 2

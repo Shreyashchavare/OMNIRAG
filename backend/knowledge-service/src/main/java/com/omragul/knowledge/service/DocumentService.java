@@ -200,6 +200,10 @@ public interface DocumentService {
 
     boolean existsByChecksum(String checksum);
 
+    boolean existsById(UUID documentId);
+
+    boolean hasDocumentWriteAccess(UUID documentId, UUID userId);
+
     boolean existsByKnowledgeBaseAndName(
             UUID knowledgeBaseId,
             String name
@@ -210,4 +214,6 @@ public interface DocumentService {
     long countActiveDocumentsInFolder(UUID folderId);
 
     long countActiveDocumentsInCategory(UUID categoryId);
+
+    List<UUID> getActiveDocumentIds(UUID knowledgeBaseId, java.util.Collection<UUID> documentIds);
 }

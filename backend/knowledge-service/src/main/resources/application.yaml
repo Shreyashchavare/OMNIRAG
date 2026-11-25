@@ -6,6 +6,11 @@ internal:
   service:
     secret: ${INTERNAL_SERVICE_SECRET}
 
+gateway:
+  assertion:
+    public-key-path: ${GATEWAY_ASSERTION_PUBLIC_KEY_PATH:}
+    expected-audience: ${GATEWAY_ASSERTION_EXPECTED_AUDIENCE:knowledge-service}
+
 spring:
   application:
     name: knowledge-service
