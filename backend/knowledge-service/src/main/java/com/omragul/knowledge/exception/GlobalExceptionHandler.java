@@ -184,6 +184,22 @@ public class GlobalExceptionHandler {
                         .build());
     }
 
+    @ExceptionHandler(SecurityException.class)
+    public ResponseEntity<ErrorResponseDto> handleSecurityException(
+            SecurityException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Security violation at {}: {}", request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponseDto.builder()
+                        .timestamp(Instant.now())
+                        .status(HttpStatus.FORBIDDEN.value())
+                        .error("FORBIDDEN")
+                        .message("Access to requested resource or storage path is forbidden")
+                        .path(request.getRequestURI())
+                        .build());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponseDto> handleUnhandledException(
             Exception ex,

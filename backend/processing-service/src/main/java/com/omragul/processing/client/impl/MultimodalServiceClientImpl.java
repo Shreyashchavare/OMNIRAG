@@ -1,6 +1,8 @@
 package com.omragul.processing.client.impl;
 
+import com.omragul.processing.client.KnowledgeServiceClient;
 import com.omragul.processing.client.MultimodalServiceClient;
+import com.omragul.processing.client.dto.ChunkRequestDto;
 import com.omragul.processing.client.dto.ChunkResponseDto;
 import com.omragul.processing.client.dto.DocumentDto;
 import com.omragul.processing.client.dto.OcrResponseDto;
@@ -9,8 +11,11 @@ import com.omragul.processing.client.dto.SpeechResponseDto;
 import com.omragul.processing.exception.DownstreamServiceException;
 import com.omragul.processing.exception.PermanentProcessingException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -21,13 +26,16 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
+import java.io.BufferedOutputStream;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.nio.file.Path;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -36,12 +44,22 @@ import java.util.List;
 public class MultimodalServiceClientImpl implements MultimodalServiceClient {
 
     private final RestClient restClient;
+    private final KnowledgeServiceClient knowledgeServiceClient;
+    private final String internalSecret;
+    private final long maxFileSizeBytes;
 
+    @Autowired
     public MultimodalServiceClientImpl(
-            @Value("${processing.multimodal-service.url:http://localhost:8004}") String baseUrl,
-            @Value("${processing.orchestration.connect-timeout-ms:5000}") int connectTimeoutMs,
-            @Value("${processing.orchestration.read-timeout-ms:30000}") int readTimeoutMs
+            KnowledgeServiceClient knowledgeServiceClient,
+            @Value("${processing.multimodal-service.url:http://localhost:8003}") String baseUrl,
+            @Value("${processing.orchestration.connect-timeout-ms:1000}") int connectTimeoutMs,
+            @Value("${processing.multimodal-service.read-timeout-ms:${processing.orchestration.ai-read-timeout-ms:30000}}") int readTimeoutMs,
+            @Value("${processing.orchestration.max-file-size-bytes:104857600}") long maxFileSizeBytes,
+            @Value("${internal.service.secret:}") String internalSecret
     ) {
+        this.knowledgeServiceClient = knowledgeServiceClient;
+        this.internalSecret = internalSecret;
+        this.maxFileSizeBytes = maxFileSizeBytes;
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
         requestFactory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
@@ -52,39 +70,92 @@ public class MultimodalServiceClientImpl implements MultimodalServiceClient {
                 .build();
     }
 
+    public MultimodalServiceClientImpl(
+            KnowledgeServiceClient knowledgeServiceClient,
+            String baseUrl,
+            int connectTimeoutMs,
+            int readTimeoutMs,
+            String internalSecret
+    ) {
+        this(knowledgeServiceClient, baseUrl, connectTimeoutMs, readTimeoutMs, 104857600L, internalSecret);
+    }
+
+    public MultimodalServiceClientImpl(
+            KnowledgeServiceClient knowledgeServiceClient,
+            String baseUrl,
+            int connectTimeoutMs,
+            int readTimeoutMs
+    ) {
+        this(knowledgeServiceClient, baseUrl, connectTimeoutMs, readTimeoutMs, 104857600L, "");
+    }
+
+    public MultimodalServiceClientImpl(
+            @Value("${processing.multimodal-service.url:http://localhost:8003}") String baseUrl,
+            @Value("${processing.orchestration.connect-timeout-ms:1000}") int connectTimeoutMs,
+            @Value("${processing.multimodal-service.read-timeout-ms:${processing.orchestration.ai-read-timeout-ms:30000}}") int readTimeoutMs
+    ) {
+        this(null, baseUrl, connectTimeoutMs, readTimeoutMs, 104857600L, "");
+    }
+
     @Override
     public String extractText(DocumentDto document) {
+        if (document == null || document.getId() == null) {
+            throw new IllegalArgumentException("Document and document ID are required for extraction");
+        }
         log.info("Extracting text for document: {} (name: {}, mime: {})",
                 document.getId(), document.getName(), document.getMimeType());
 
-        byte[] fileBytes = loadDocumentBytes(document);
+        if (knowledgeServiceClient == null) {
+            throw new IllegalStateException("KnowledgeServiceClient is not configured for document content retrieval");
+        }
+
         String mimeType = document.getMimeType() != null ? document.getMimeType().toLowerCase() : "";
         String extension = document.getFileExtension() != null ? document.getFileExtension().toLowerCase() : "";
-        String filename = document.getOriginalFilename() != null ? document.getOriginalFilename() : "document";
 
-        try {
-            if (isTextFormat(mimeType, extension)) {
-                log.info("Directly reading text content for document: {}", document.getId());
-                return new String(fileBytes, StandardCharsets.UTF_8);
-            } else if (isPdfFormat(mimeType, extension)) {
-                return extractPdfText(fileBytes, filename);
-            } else if (isImageFormat(mimeType, extension)) {
-                return extractImageOcrText(fileBytes, filename);
-            } else if (isAudioFormat(mimeType, extension)) {
-                return extractAudioSpeechText(fileBytes, filename);
-            } else {
-                // Fallback attempt: if mime is unknown, attempt text decode or raise permanent error
-                log.warn("Unrecognized MIME type {} or extension {}, attempting UTF-8 decode", mimeType, extension);
-                return new String(fileBytes, StandardCharsets.UTF_8);
+        return knowledgeServiceClient.streamDocumentContent(document.getId(), (inputStream, contentType, filename, contentLength) -> {
+            String effectiveFilename = (filename != null && !filename.isBlank()) ? filename :
+                    (document.getOriginalFilename() != null ? document.getOriginalFilename() : "document");
+
+            try {
+                if (isTextFormat(mimeType, extension)) {
+                    log.info("Directly reading text content for document: {}", document.getId());
+                    byte[] bytes = inputStream.readAllBytes();
+                    if (bytes.length == 0) {
+                        throw new PermanentProcessingException("EMPTY_TEXT", "Document content is empty for document: " + document.getId());
+                    }
+                    return new String(bytes, StandardCharsets.UTF_8);
+                } else if (isPdfFormat(mimeType, extension)) {
+                    return extractPdfText(inputStream, effectiveFilename);
+                } else if (isImageFormat(mimeType, extension)) {
+                    String effectiveContentType = (contentType != null && !contentType.isBlank()) ? contentType : "image/jpeg";
+                    return extractImageOcrText(inputStream, effectiveFilename, effectiveContentType);
+                } else if (isAudioFormat(mimeType, extension)) {
+                    String effectiveContentType = (contentType != null && !contentType.isBlank()) ? contentType : "audio/wav";
+                    return extractAudioSpeechText(inputStream, effectiveFilename, effectiveContentType);
+                } else {
+                    log.warn("Unrecognized MIME type {} or extension {}, attempting UTF-8 decode", mimeType, extension);
+                    byte[] fileBytes = inputStream.readAllBytes();
+                    if (fileBytes.length == 0) {
+                        throw new PermanentProcessingException("EMPTY_CONTENT", "Document content is empty for document: " + document.getId());
+                    }
+                    return new String(fileBytes, StandardCharsets.UTF_8);
+                }
+            } catch (DownstreamServiceException | PermanentProcessingException | IllegalStateException e) {
+                throw e;
+            } catch (ResourceAccessException e) {
+                log.error("Network/timeout error connecting to Multimodal Service: {}", e.getMessage());
+                throw DownstreamServiceException.fromResourceAccessException("multimodal-service", e);
+            } catch (Exception e) {
+                log.error("Error during extraction for document {}: {}", document.getId(), e.getMessage());
+                throw new DownstreamServiceException("multimodal-service", "Failed to extract text from document", e);
             }
-        } catch (DownstreamServiceException | PermanentProcessingException e) {
-            throw e;
-        } catch (ResourceAccessException e) {
-            log.error("Network/timeout error connecting to Multimodal Service: {}", e.getMessage());
-            throw new DownstreamServiceException("multimodal-service", "Network failure connecting to Multimodal Service", e);
-        } catch (Exception e) {
-            log.error("Error during extraction for document {}: {}", document.getId(), e.getMessage());
-            throw new DownstreamServiceException("multimodal-service", "Failed to extract text from document", e);
+        });
+    }
+
+    private void validateInternalSecret() {
+        if (internalSecret == null || internalSecret.isBlank()) {
+            log.error("INTERNAL_SERVICE_SECRET configuration is missing for MultimodalServiceClient");
+            throw new IllegalStateException("INTERNAL_SERVICE_SECRET is not configured for MultimodalServiceClient");
         }
     }
 
@@ -94,102 +165,195 @@ public class MultimodalServiceClientImpl implements MultimodalServiceClient {
             return Collections.emptyList();
         }
 
-        // 1. Try Multimodal chunk API if text length is moderate
-        if (text.length() < 1000) {
-            try {
-                ChunkResponseDto response = restClient.post()
-                        .uri(uriBuilder -> uriBuilder
-                                .path("/api/v1/multimodal/chunk")
-                                .queryParam("text", text)
-                                .build())
-                        .retrieve()
-                        .body(ChunkResponseDto.class);
+        validateInternalSecret();
 
-                if (response != null && response.getChunks() != null && !response.getChunks().isEmpty()) {
-                    return response.getChunks();
-                }
-            } catch (Exception e) {
-                log.warn("Multimodal chunk API call returned error ({}), falling back to deterministic local chunking", e.getMessage());
+        log.info("Calling Multimodal Service POST /api/v1/multimodal/chunk with JSON body for text of length {}", text.length());
+        try {
+            ChunkResponseDto response = restClient.post()
+                    .uri("/api/v1/multimodal/chunk")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header("X-Internal-Service-Secret", internalSecret)
+                    .header("X-Internal-Secret", internalSecret)
+                    .header("X-Internal-Caller-Service", "processing-service")
+                    .body(new ChunkRequestDto(text))
+                    .retrieve()
+                    .body(ChunkResponseDto.class);
+
+            if (response == null || response.getChunks() == null || response.getChunks().isEmpty()) {
+                throw new PermanentProcessingException("EMPTY_CHUNKS", "Multimodal chunk service returned 0 chunks");
             }
+            return response.getChunks();
+        } catch (DownstreamServiceException | PermanentProcessingException e) {
+            throw e;
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            log.error("Client error from Multimodal chunk service: {} - {}", e.getStatusCode(), e.getMessage());
+            throw DownstreamServiceException.fromHttpClientErrorException("multimodal-service", e);
+        } catch (org.springframework.web.client.HttpServerErrorException e) {
+            log.error("Server error from Multimodal chunk service: {} - {}", e.getStatusCode(), e.getMessage());
+            throw DownstreamServiceException.fromHttpServerErrorException("multimodal-service", e);
+        } catch (ResourceAccessException e) {
+            log.error("Network/timeout error connecting to Multimodal chunk service: {}", e.getMessage());
+            throw DownstreamServiceException.fromResourceAccessException("multimodal-service", e);
+        } catch (Exception e) {
+            log.error("Error creating chunks via Multimodal Service: {}", e.getMessage());
+            throw new DownstreamServiceException("multimodal-service", "Failed to create chunks", e);
         }
-
-        // 2. Reliable deterministic chunking matching Multimodal ChunkService logic (chunk_size=1000, chunk_overlap=200)
-        return chunkLocally(text, 1000, 200);
     }
 
-    private String extractPdfText(byte[] fileBytes, String filename) {
-        log.info("Calling Multimodal Service POST /api/v1/multimodal/pdf/extract for {}", filename);
-        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-        body.add("file", new NamedByteArrayResource(fileBytes, filename, "application/pdf"));
+    private <T> T forwardMultipartFile(
+            InputStream inputStream,
+            String filename,
+            String contentType,
+            String uri,
+            Class<T> responseType
+    ) {
+        validateInternalSecret();
+        log.info("Forwarding multipart file {} ({}) to Multimodal Service POST {}", filename, contentType, uri);
 
-        PdfResponseDto response = restClient.post()
-                .uri("/api/v1/multimodal/pdf/extract")
-                .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(body)
-                .retrieve()
-                .body(PdfResponseDto.class);
+        Path tempFile = null;
+        try {
+            tempFile = spoolToTempFile(inputStream, filename);
 
+            Resource resource = new NamedFileSystemResource(tempFile.toFile(), filename, contentType);
+
+            HttpHeaders partHeaders = new HttpHeaders();
+            if (contentType != null && !contentType.isBlank()) {
+                partHeaders.setContentType(MediaType.parseMediaType(contentType));
+            }
+            HttpEntity<Resource> filePart = new HttpEntity<>(resource, partHeaders);
+
+            MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+            body.add("file", filePart);
+
+            return restClient.post()
+                    .uri(uri)
+                    .contentType(MediaType.MULTIPART_FORM_DATA)
+                    .header("X-Internal-Service-Secret", internalSecret)
+                    .header("X-Internal-Secret", internalSecret)
+                    .header("X-Internal-Caller-Service", "processing-service")
+                    .body(body)
+                    .retrieve()
+                    .body(responseType);
+
+        } catch (DownstreamServiceException | PermanentProcessingException | IllegalStateException e) {
+            throw e;
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            log.error("Client error from Multimodal Service on {}: {} - {}", uri, e.getStatusCode(), e.getMessage());
+            throw DownstreamServiceException.fromHttpClientErrorException("multimodal-service", e);
+        } catch (org.springframework.web.client.HttpServerErrorException e) {
+            log.error("Server error from Multimodal Service on {}: {} - {}", uri, e.getStatusCode(), e.getMessage());
+            throw DownstreamServiceException.fromHttpServerErrorException("multimodal-service", e);
+        } catch (ResourceAccessException e) {
+            log.error("Network/timeout error connecting to Multimodal Service on {}: {}", uri, e.getMessage());
+            throw DownstreamServiceException.fromResourceAccessException("multimodal-service", e);
+        } catch (Exception e) {
+            log.error("Error forwarding multipart file to Multimodal Service on {}: {}", uri, e.getMessage());
+            throw new DownstreamServiceException("multimodal-service", "Failed to forward file to Multimodal Service", e);
+        } finally {
+            if (tempFile != null) {
+                try {
+                    Files.deleteIfExists(tempFile);
+                    log.debug("Cleaned up temporary multipart forwarding file: {}", tempFile);
+                } catch (IOException e) {
+                    log.warn("Failed to delete temporary multipart file {}: {}", tempFile, e.getMessage());
+                }
+            }
+        }
+    }
+
+    private Path spoolToTempFile(InputStream in, String filename) {
+        Path tempPath = null;
+        try {
+            tempPath = Files.createTempFile("omragul_mm_upload_", ".tmp");
+            long totalBytes = 0;
+            byte[] buffer = new byte[65536]; // 64 KB streaming buffer
+            try (OutputStream out = new BufferedOutputStream(Files.newOutputStream(tempPath), 65536)) {
+                int read;
+                while ((read = in.read(buffer)) != -1) {
+                    totalBytes += read;
+                    if (maxFileSizeBytes > 0 && totalBytes > maxFileSizeBytes) {
+                        log.error("File {} exceeded maximum upload limit of {} bytes (read {} bytes)",
+                                filename, maxFileSizeBytes, totalBytes);
+                        throw new PermanentProcessingException("FILE_TOO_LARGE",
+                                String.format("File %s exceeded maximum allowed size limit of %d bytes",
+                                        filename, maxFileSizeBytes));
+                    }
+                    out.write(buffer, 0, read);
+                }
+                out.flush();
+            }
+
+            if (totalBytes == 0) {
+                throw new PermanentProcessingException("EMPTY_CONTENT",
+                        "Document content is empty for file: " + filename);
+            }
+
+            log.debug("Spooled {} bytes to temp file {} for {}", totalBytes, tempPath, filename);
+            return tempPath;
+        } catch (PermanentProcessingException e) {
+            if (tempPath != null) {
+                try {
+                    Files.deleteIfExists(tempPath);
+                } catch (IOException ignored) {}
+            }
+            throw e;
+        } catch (IOException e) {
+            if (tempPath != null) {
+                try {
+                    Files.deleteIfExists(tempPath);
+                } catch (IOException ignored) {}
+            }
+            log.error("I/O error spooling document stream for {}: {}", filename, e.getMessage());
+            throw new DownstreamServiceException("processing-service",
+                    "Failed to spool document stream for forwarding", e);
+        }
+    }
+
+    private String extractPdfText(InputStream inputStream, String filename) {
+        PdfResponseDto response = forwardMultipartFile(
+                inputStream, filename, "application/pdf",
+                "/api/v1/multimodal/pdf/extract", PdfResponseDto.class
+        );
         if (response == null || response.getText() == null || response.getText().isBlank()) {
             throw new PermanentProcessingException("EMPTY_EXTRACTION", "No text could be extracted from PDF: " + filename);
         }
         return response.getText();
     }
 
-    private String extractImageOcrText(byte[] fileBytes, String filename) {
-        log.info("Calling Multimodal Service POST /api/v1/multimodal/ocr for {}", filename);
-        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-        body.add("file", new NamedByteArrayResource(fileBytes, filename, "image/jpeg"));
+    public String extractPdfText(byte[] fileBytes, String filename) {
+        return extractPdfText(new ByteArrayInputStream(fileBytes), filename);
+    }
 
-        OcrResponseDto response = restClient.post()
-                .uri("/api/v1/multimodal/ocr")
-                .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(body)
-                .retrieve()
-                .body(OcrResponseDto.class);
-
+    private String extractImageOcrText(InputStream inputStream, String filename, String contentType) {
+        String effectiveContentType = (contentType != null && !contentType.isBlank()) ? contentType : "image/jpeg";
+        OcrResponseDto response = forwardMultipartFile(
+                inputStream, filename, effectiveContentType,
+                "/api/v1/multimodal/ocr", OcrResponseDto.class
+        );
         if (response == null || response.getText() == null || response.getText().isBlank()) {
-            throw new PermanentProcessingException("EMPTY_OCR", "No text detected in image: " + filename);
+            throw new PermanentProcessingException("EMPTY_EXTRACTION", "No text could be extracted from image OCR: " + filename);
         }
         return response.getText();
     }
 
-    private String extractAudioSpeechText(byte[] fileBytes, String filename) {
-        log.info("Calling Multimodal Service POST /api/v1/multimodal/speech/transcribe for {}", filename);
-        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-        body.add("file", new NamedByteArrayResource(fileBytes, filename, "audio/wav"));
+    public String extractImageOcrText(byte[] fileBytes, String filename) {
+        return extractImageOcrText(new ByteArrayInputStream(fileBytes), filename, "image/jpeg");
+    }
 
-        SpeechResponseDto response = restClient.post()
-                .uri("/api/v1/multimodal/speech/transcribe")
-                .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(body)
-                .retrieve()
-                .body(SpeechResponseDto.class);
-
+    private String extractAudioSpeechText(InputStream inputStream, String filename, String contentType) {
+        String effectiveContentType = (contentType != null && !contentType.isBlank()) ? contentType : "audio/wav";
+        SpeechResponseDto response = forwardMultipartFile(
+                inputStream, filename, effectiveContentType,
+                "/api/v1/multimodal/speech/transcribe", SpeechResponseDto.class
+        );
         if (response == null || response.getText() == null || response.getText().isBlank()) {
-            throw new PermanentProcessingException("EMPTY_TRANSCRIPTION", "No speech detected in audio file: " + filename);
+            throw new PermanentProcessingException("EMPTY_EXTRACTION", "No speech transcription generated for: " + filename);
         }
         return response.getText();
     }
 
-    private byte[] loadDocumentBytes(DocumentDto document) {
-        String pathStr = document.getStoragePath();
-        if (pathStr != null && !pathStr.isBlank()) {
-            File file = new File(pathStr);
-            if (file.exists() && file.isFile()) {
-                try {
-                    return Files.readAllBytes(file.toPath());
-                } catch (IOException e) {
-                    log.error("Failed to read document file at path {}: {}", pathStr, e.getMessage());
-                }
-            }
-        }
-
-        // If file not on local disk, check if name/originalFilename contains mock/inline text for testing
-        if (document.getName() != null) {
-            return document.getName().getBytes(StandardCharsets.UTF_8);
-        }
-
-        throw new PermanentProcessingException("FILE_NOT_FOUND", "Document file could not be read from storage path: " + pathStr);
+    public String extractAudioSpeechText(byte[] fileBytes, String filename) {
+        return extractAudioSpeechText(new ByteArrayInputStream(fileBytes), filename, "audio/wav");
     }
 
     private boolean isTextFormat(String mime, String ext) {
@@ -211,26 +375,27 @@ public class MultimodalServiceClientImpl implements MultimodalServiceClient {
                 || ext.equals(".m4a") || ext.equals(".ogg");
     }
 
-    private List<String> chunkLocally(String text, int chunkSize, int chunkOverlap) {
-        List<String> chunks = new ArrayList<>();
-        int start = 0;
-        int textLength = text.length();
+    public static class NamedFileSystemResource extends FileSystemResource {
+        private final String filename;
+        private final String contentType;
 
-        while (start < textLength) {
-            int end = Math.min(start + chunkSize, textLength);
-            String chunk = text.substring(start, end).trim();
-            if (!chunk.isEmpty()) {
-                chunks.add(chunk);
-            }
-            start += (chunkSize - chunkOverlap);
-            if (chunkSize <= chunkOverlap) {
-                break;
-            }
+        public NamedFileSystemResource(File file, String filename, String contentType) {
+            super(file);
+            this.filename = (filename != null && !filename.isBlank()) ? filename : file.getName();
+            this.contentType = contentType;
         }
-        return chunks;
+
+        @Override
+        public String getFilename() {
+            return this.filename;
+        }
+
+        public String getContentType() {
+            return this.contentType;
+        }
     }
 
-    private static class NamedByteArrayResource extends ByteArrayResource {
+    public static class NamedByteArrayResource extends ByteArrayResource {
         private final String filename;
         private final String contentType;
 
@@ -243,6 +408,10 @@ public class MultimodalServiceClientImpl implements MultimodalServiceClient {
         @Override
         public String getFilename() {
             return this.filename;
+        }
+
+        public String getContentType() {
+            return this.contentType;
         }
     }
 }

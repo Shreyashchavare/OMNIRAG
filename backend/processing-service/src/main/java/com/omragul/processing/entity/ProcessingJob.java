@@ -13,6 +13,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -28,9 +29,13 @@ import java.util.UUID;
         name = "processing_jobs",
         indexes = {
                 @Index(name = "idx_processing_jobs_document_id", columnList = "document_id"),
+                @Index(name = "idx_processing_jobs_owner_id", columnList = "owner_id"),
                 @Index(name = "idx_processing_jobs_status", columnList = "status"),
                 @Index(name = "idx_processing_jobs_idempotency_key", columnList = "idempotency_key"),
                 @Index(name = "idx_processing_jobs_created_at", columnList = "created_at")
+        },
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_processing_jobs_doc_idempotency", columnNames = {"document_id", "idempotency_key"})
         }
 )
 @Getter
@@ -50,6 +55,9 @@ public class ProcessingJob {
     @Column(name = "knowledge_base_id")
     private UUID knowledgeBaseId;
 
+    @Column(name = "owner_id")
+    private UUID ownerId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
     @Builder.Default
@@ -60,7 +68,7 @@ public class ProcessingJob {
     @Builder.Default
     private ProcessingStage stage = ProcessingStage.INITIALIZATION;
 
-    @Column(name = "current_step", length = 100)
+    @Column(name = "current_step", length = 500)
     private String currentStep;
 
     @Column(name = "attempt_count", nullable = false)
@@ -118,11 +126,24 @@ public class ProcessingJob {
         if (this.stage == null) {
             this.stage = ProcessingStage.INITIALIZATION;
         }
+        truncateCurrentStepIfNeeded();
     }
 
     @PreUpdate
     public void preUpdate() {
         this.updatedAt = Instant.now();
+        truncateCurrentStepIfNeeded();
+    }
+
+    public void setCurrentStep(String currentStep) {
+        this.currentStep = currentStep;
+        truncateCurrentStepIfNeeded();
+    }
+
+    private void truncateCurrentStepIfNeeded() {
+        if (this.currentStep != null && this.currentStep.length() > 500) {
+            this.currentStep = this.currentStep.substring(0, 497) + "...";
+        }
     }
 
     public boolean canRetry() {

@@ -1,4 +1,5 @@
-from pydantic import BaseModel
+from typing import Optional
+from pydantic import BaseModel, Field
 
 
 class QueryRequest(BaseModel):
@@ -13,6 +14,7 @@ class QueryEmbeddingResponse(BaseModel):
 
 class IndexRequest(BaseModel):
     chunks: list[dict]
+    knowledge_base_id: str = Field(..., min_length=1)
 
 
 class IndexResponse(BaseModel):
@@ -20,8 +22,9 @@ class IndexResponse(BaseModel):
 
 
 class SearchRequest(BaseModel):
-    query: str
-    top_k: int = 5
+    query: str = Field(..., min_length=1)
+    knowledge_base_id: str = Field(..., min_length=1)
+    top_k: int = Field(default=5, gt=0)
 
 
 class SearchResult(BaseModel):
@@ -30,4 +33,15 @@ class SearchResult(BaseModel):
 
 
 class SearchResponse(BaseModel):
-    results: list[SearchResult] 
+    results: list[SearchResult]
+
+
+class DeleteDocumentResponse(BaseModel):
+    document_id: str
+    knowledge_base_id: Optional[str] = None
+    deleted_chunks: int
+
+
+class DeleteKnowledgeBaseResponse(BaseModel):
+    knowledge_base_id: str
+    deleted: bool

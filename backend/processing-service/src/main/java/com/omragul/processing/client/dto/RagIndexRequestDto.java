@@ -1,5 +1,7 @@
 package com.omragul.processing.client.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -14,6 +16,14 @@ import java.util.Map;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class RagIndexRequestDto {
     private List<Map<String, Object>> chunks;
+
+    @JsonProperty("knowledge_base_id")
+    private String knowledgeBaseId;
+
+    public RagIndexRequestDto(List<Map<String, Object>> chunks) {
+        this.chunks = chunks;
+    }
 }

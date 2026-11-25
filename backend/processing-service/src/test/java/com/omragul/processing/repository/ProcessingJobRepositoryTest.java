@@ -104,4 +104,88 @@ class ProcessingJobRepositoryTest {
         assertTrue(interrupted.stream().anyMatch(j -> j.getDocumentId().equals(doc1)));
         assertFalse(interrupted.stream().anyMatch(j -> j.getDocumentId().equals(doc2)));
     }
+
+    @Test
+    @DisplayName("PROC-13: claimJobAtomic atomically transitions QUEUED job and increments version and attempt count")
+    void testClaimJobAtomicSuccess() {
+        ProcessingJob job = ProcessingJob.builder()
+                .documentId(UUID.randomUUID())
+                .status(ProcessingStatus.QUEUED)
+                .stage(ProcessingStage.INITIALIZATION)
+                .attemptCount(0)
+                .maxAttempts(3)
+                .build();
+        ProcessingJob saved = repository.saveAndFlush(job);
+        UUID jobId = saved.getId();
+        Long initialVersion = saved.getVersion();
+        java.time.Instant now = java.time.Instant.now();
+
+        int rowsUpdated = repository.claimJobAtomic(
+                jobId,
+                ProcessingStatus.QUEUED,
+                ProcessingStatus.VALIDATING,
+                ProcessingStage.VALIDATION,
+                "Validating document eligibility",
+                now
+        );
+
+        assertEquals(1, rowsUpdated);
+
+        Optional<ProcessingJob> reloaded = repository.findById(jobId);
+        assertTrue(reloaded.isPresent());
+        ProcessingJob claimed = reloaded.get();
+        assertEquals(ProcessingStatus.VALIDATING, claimed.getStatus());
+        assertEquals(ProcessingStage.VALIDATION, claimed.getStage());
+        assertEquals(1, claimed.getAttemptCount());
+        assertEquals("Validating document eligibility", claimed.getCurrentStep());
+        assertNotNull(claimed.getStartedAt());
+        assertNotNull(claimed.getUpdatedAt());
+        assertEquals(initialVersion + 1, claimed.getVersion());
+    }
+
+    @Test
+    @DisplayName("PROC-13: claimJobAtomic returns 0 when job is not in expected QUEUED status")
+    void testClaimJobAtomicNonQueuedFails() {
+        ProcessingJob job = ProcessingJob.builder()
+                .documentId(UUID.randomUUID())
+                .status(ProcessingStatus.FAILED)
+                .stage(ProcessingStage.FAILED)
+                .attemptCount(1)
+                .maxAttempts(3)
+                .build();
+        ProcessingJob saved = repository.saveAndFlush(job);
+        UUID jobId = saved.getId();
+        Long initialVersion = saved.getVersion();
+
+        int rowsUpdated = repository.claimJobAtomic(
+                jobId,
+                ProcessingStatus.QUEUED,
+                ProcessingStatus.VALIDATING,
+                ProcessingStage.VALIDATION,
+                "Validating document eligibility",
+                java.time.Instant.now()
+        );
+
+        assertEquals(0, rowsUpdated);
+
+        Optional<ProcessingJob> reloaded = repository.findById(jobId);
+        assertTrue(reloaded.isPresent());
+        assertEquals(ProcessingStatus.FAILED, reloaded.get().getStatus());
+        assertEquals(initialVersion, reloaded.get().getVersion());
+        assertEquals(1, reloaded.get().getAttemptCount());
+    }
+
+    @Test
+    @DisplayName("PROC-13: claimJobAtomic returns 0 for non-existent job ID")
+    void testClaimJobAtomicNonExistentJobReturnsZero() {
+        int rowsUpdated = repository.claimJobAtomic(
+                UUID.randomUUID(),
+                ProcessingStatus.QUEUED,
+                ProcessingStatus.VALIDATING,
+                ProcessingStage.VALIDATION,
+                "Validating document eligibility",
+                java.time.Instant.now()
+        );
+        assertEquals(0, rowsUpdated);
+    }
 }

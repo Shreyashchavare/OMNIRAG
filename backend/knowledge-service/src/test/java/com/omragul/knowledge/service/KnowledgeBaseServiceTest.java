@@ -198,4 +198,15 @@ class KnowledgeBaseServiceTest {
                 knowledgeBaseService.delete(kbId, attackerId)
         );
     }
+
+    @Test
+    @DisplayName("Get by ID - soft-deleted KB throws ResourceNotFoundException even for owner")
+    void testGetById_SoftDeletedKbThrowsResourceNotFound() {
+        privateKb.setStatus(KnowledgeBase.Status.DELETED);
+        when(knowledgeBaseRepository.findById(kbId)).thenReturn(Optional.of(privateKb));
+
+        assertThrows(ResourceNotFoundException.class, () ->
+                knowledgeBaseService.getById(kbId, ownerId)
+        );
+    }
 }

@@ -33,6 +33,86 @@ public class GlobalExceptionHandler {
                         .build());
     }
 
+    @ExceptionHandler(DocumentNotFoundException.class)
+    public ResponseEntity<ErrorResponseDto> handleDocumentNotFound(
+            DocumentNotFoundException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Document not found: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponseDto.builder()
+                        .timestamp(Instant.now())
+                        .status(HttpStatus.NOT_FOUND.value())
+                        .error("DOCUMENT_NOT_FOUND")
+                        .message(ex.getMessage())
+                        .path(request.getRequestURI())
+                        .build());
+    }
+
+    @ExceptionHandler(KnowledgeBaseMismatchException.class)
+    public ResponseEntity<ErrorResponseDto> handleKnowledgeBaseMismatch(
+            KnowledgeBaseMismatchException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Knowledge base mismatch: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponseDto.builder()
+                        .timestamp(Instant.now())
+                        .status(HttpStatus.BAD_REQUEST.value())
+                        .error("KNOWLEDGE_BASE_MISMATCH")
+                        .message(ex.getMessage())
+                        .path(request.getRequestURI())
+                        .build());
+    }
+
+    @ExceptionHandler(InvalidDocumentStateException.class)
+    public ResponseEntity<ErrorResponseDto> handleInvalidDocumentState(
+            InvalidDocumentStateException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Invalid document state: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponseDto.builder()
+                        .timestamp(Instant.now())
+                        .status(HttpStatus.BAD_REQUEST.value())
+                        .error("INVALID_DOCUMENT_STATE")
+                        .message(ex.getMessage())
+                        .path(request.getRequestURI())
+                        .build());
+    }
+
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<ErrorResponseDto> handleUnauthorized(
+            UnauthorizedException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Unauthorized access to {}: {}", request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ErrorResponseDto.builder()
+                        .timestamp(Instant.now())
+                        .status(HttpStatus.UNAUTHORIZED.value())
+                        .error("UNAUTHORIZED")
+                        .message(ex.getMessage())
+                        .path(request.getRequestURI())
+                        .build());
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponseDto> handleAccessDenied(
+            AccessDeniedException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Access denied to {}: {}", request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponseDto.builder()
+                        .timestamp(Instant.now())
+                        .status(HttpStatus.FORBIDDEN.value())
+                        .error("FORBIDDEN")
+                        .message(ex.getMessage())
+                        .path(request.getRequestURI())
+                        .build());
+    }
+
     @ExceptionHandler(DuplicateJobException.class)
     public ResponseEntity<ErrorResponseDto> handleDuplicateJob(
             DuplicateJobException ex,
@@ -45,6 +125,22 @@ public class GlobalExceptionHandler {
                         .status(HttpStatus.CONFLICT.value())
                         .error("DUPLICATE_JOB")
                         .message(ex.getMessage())
+                        .path(request.getRequestURI())
+                        .build());
+    }
+
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponseDto> handleDataIntegrityViolation(
+            org.springframework.dao.DataIntegrityViolationException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Database constraint violation on request to {}: {}", request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponseDto.builder()
+                        .timestamp(Instant.now())
+                        .status(HttpStatus.CONFLICT.value())
+                        .error("DUPLICATE_JOB")
+                        .message("Concurrent duplicate job submission or constraint violation detected")
                         .path(request.getRequestURI())
                         .build());
     }

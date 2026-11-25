@@ -8,6 +8,8 @@ spring:
     property-naming-strategy: SNAKE_CASE
 
 gateway:
+  assertion:
+    enabled: false
   services:
     identity:
       url: http://localhost:8081

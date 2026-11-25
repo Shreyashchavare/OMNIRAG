@@ -23,15 +23,17 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 class EmbeddingServiceClientTest {
 
+    private static final String TEST_SECRET = "test-internal-secret-123";
+
     private EmbeddingServiceClientImpl client;
     private MockRestServiceServer mockServer;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() throws Exception {
-        client = new EmbeddingServiceClientImpl("http://localhost:8003", 2000, 5000);
+        client = new EmbeddingServiceClientImpl("http://localhost:8001", 2000, 5000, TEST_SECRET);
 
-        RestClient.Builder builder = RestClient.builder().baseUrl("http://localhost:8003");
+        RestClient.Builder builder = RestClient.builder().baseUrl("http://localhost:8001");
         mockServer = MockRestServiceServer.bindTo(builder).build();
         RestClient restClient = builder.build();
 
@@ -41,7 +43,7 @@ class EmbeddingServiceClientTest {
     }
 
     @Test
-    @DisplayName("Should successfully generate batch embeddings via POST /api/v1/embeddings/batch")
+    @DisplayName("Should successfully generate batch embeddings via POST /api/v1/embeddings/batch with internal secret header")
     void testGenerateBatchEmbeddingsSuccess() throws Exception {
         List<String> texts = List.of("Hello world", "Machine learning");
 
@@ -54,8 +56,10 @@ class EmbeddingServiceClientTest {
                 ))
                 .build();
 
-        mockServer.expect(requestTo("http://localhost:8003/api/v1/embeddings/batch"))
+        mockServer.expect(requestTo("http://localhost:8001/api/v1/embeddings/batch"))
                 .andExpect(method(HttpMethod.POST))
+                .andExpect(header("X-Internal-Service-Secret", TEST_SECRET))
+                .andExpect(header("X-Internal-Caller-Service", "processing-service"))
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.texts[0]").value("Hello world"))
                 .andExpect(jsonPath("$.texts[1]").value("Machine learning"))
@@ -68,6 +72,15 @@ class EmbeddingServiceClientTest {
         assertEquals(384, response.getDimension());
         assertEquals(2, response.getEmbeddings().size());
         mockServer.verify();
+    }
+
+    @Test
+    @DisplayName("Should fail clearly when internal service secret is not configured")
+    void testGenerateBatchEmbeddingsMissingSecretConfiguration() {
+        EmbeddingServiceClientImpl unconfiguredClient = new EmbeddingServiceClientImpl("http://localhost:8001", 2000, 5000, "");
+        IllegalStateException ex = assertThrows(IllegalStateException.class,
+                () -> unconfiguredClient.generateBatchEmbeddings(List.of("Sample text")));
+        assertTrue(ex.getMessage().contains("INTERNAL_SERVICE_SECRET is not configured"));
     }
 
     @Test
@@ -89,7 +102,7 @@ class EmbeddingServiceClientTest {
     @Test
     @DisplayName("Should propagate 4xx client errors as DownstreamServiceException with status code")
     void testGenerateBatchEmbeddingsClientError4xx() {
-        mockServer.expect(requestTo("http://localhost:8003/api/v1/embeddings/batch"))
+        mockServer.expect(requestTo("http://localhost:8001/api/v1/embeddings/batch"))
                 .andExpect(method(HttpMethod.POST))
                 .andRespond(withStatus(HttpStatus.BAD_REQUEST).body("{\"detail\":\"Texts cannot be empty\"}"));
 
@@ -104,7 +117,7 @@ class EmbeddingServiceClientTest {
     @Test
     @DisplayName("Should propagate 5xx server errors as DownstreamServiceException with status code")
     void testGenerateBatchEmbeddingsServerError5xx() {
-        mockServer.expect(requestTo("http://localhost:8003/api/v1/embeddings/batch"))
+        mockServer.expect(requestTo("http://localhost:8001/api/v1/embeddings/batch"))
                 .andExpect(method(HttpMethod.POST))
                 .andRespond(withStatus(HttpStatus.BAD_GATEWAY).body("{\"detail\":\"Model inference failed\"}"));
 
@@ -119,7 +132,7 @@ class EmbeddingServiceClientTest {
     @Test
     @DisplayName("Should handle network connection failures and timeouts")
     void testGenerateBatchEmbeddingsNetworkFailure() {
-        mockServer.expect(requestTo("http://localhost:8003/api/v1/embeddings/batch"))
+        mockServer.expect(requestTo("http://localhost:8001/api/v1/embeddings/batch"))
                 .andExpect(method(HttpMethod.POST))
                 .andRespond(withException(new java.net.ConnectException("Connection refused")));
 
@@ -134,7 +147,7 @@ class EmbeddingServiceClientTest {
     @Test
     @DisplayName("Should handle malformed response payload from Embedding Service")
     void testGenerateBatchEmbeddingsMalformedJson() {
-        mockServer.expect(requestTo("http://localhost:8003/api/v1/embeddings/batch"))
+        mockServer.expect(requestTo("http://localhost:8001/api/v1/embeddings/batch"))
                 .andExpect(method(HttpMethod.POST))
                 .andRespond(withSuccess("not-valid-json-response", MediaType.APPLICATION_JSON));
 

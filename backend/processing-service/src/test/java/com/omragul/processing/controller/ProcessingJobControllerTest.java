@@ -1,6 +1,7 @@
 package com.omragul.processing.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.omragul.processing.config.JacksonConfig;
 import com.omragul.processing.dto.request.ProcessingJobCreateRequest;
 import com.omragul.processing.dto.response.DocumentProcessingStatusResponse;
 import com.omragul.processing.dto.response.JobStatusResponse;
@@ -9,9 +10,12 @@ import com.omragul.processing.enums.ProcessingStage;
 import com.omragul.processing.enums.ProcessingStatus;
 import com.omragul.processing.exception.DuplicateJobException;
 import com.omragul.processing.exception.GlobalExceptionHandler;
-import com.omragul.processing.exception.IllegalStateTransitionException;
 import com.omragul.processing.exception.JobNotFoundException;
+import com.omragul.processing.security.GatewayAssertionVerifier;
+import com.omragul.processing.security.InternalAuthService;
+import com.omragul.processing.security.SecurityAuditLogger;
 import com.omragul.processing.service.ProcessingJobService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,7 +26,11 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import io.jsonwebtoken.Jwts;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
 import java.time.Instant;
+import java.util.Date;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -32,9 +40,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(ProcessingJobController.class)
-@Import(GlobalExceptionHandler.class)
+@Import({ GlobalExceptionHandler.class, InternalAuthService.class, JacksonConfig.class, GatewayAssertionVerifier.class,
+        SecurityAuditLogger.class })
 @ActiveProfiles("test")
 class ProcessingJobControllerTest {
+
+    private static final String DEFAULT_USER_ID = "00000000-0000-0000-0000-000000000001";
+    private static final String TEST_SECRET = "test-internal-secret";
 
     @Autowired
     private MockMvc mockMvc;
@@ -46,8 +58,117 @@ class ProcessingJobControllerTest {
     @MockitoBean
     private ProcessingJobService processingJobService;
 
+    @Autowired
+    private GatewayAssertionVerifier gatewayAssertionVerifier;
+
+    private static final KeyPair TEST_KEY_PAIR;
+    static {
+        try {
+            KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
+            gen.initialize(2048);
+            TEST_KEY_PAIR = gen.generateKeyPair();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private String validGatewayAssertion;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        gatewayAssertionVerifier.setPublicKey(TEST_KEY_PAIR.getPublic());
+        validGatewayAssertion = createAssertion(DEFAULT_USER_ID, "ROLE_USER", null, TEST_SECRET, "POST", "/api/v1/processing/jobs");
+    }
+
+    private String createAssertion(String userId, String roles, String requestId, String secret, String method, String path) throws Exception {
+        long now = Instant.now().getEpochSecond();
+        return Jwts.builder()
+                .header().type("JWT").and()
+                .id(UUID.randomUUID().toString())
+                .issuer("gateway-service")
+                .audience().single("processing-service")
+                .subject(userId)
+                .claim("roles", roles != null ? roles : "")
+                .claim("rid", requestId != null ? requestId : UUID.randomUUID().toString())
+                .claim("mth", method)
+                .claim("pth", path)
+                .issuedAt(Date.from(Instant.ofEpochSecond(now)))
+                .expiration(Date.from(Instant.ofEpochSecond(now + 60)))
+                .signWith(TEST_KEY_PAIR.getPrivate(), Jwts.SIG.RS256)
+                .compact();
+    }
+
     @Test
-    @DisplayName("POST /api/v1/processing/jobs - Success 201 Created")
+    @DisplayName("Security: Protected endpoint without identity returns 401 Unauthorized")
+    void testMissingIdentityReturns401() throws Exception {
+        UUID docId = UUID.randomUUID();
+        ProcessingJobCreateRequest request = ProcessingJobCreateRequest.builder()
+                .documentId(docId)
+                .build();
+
+        mockMvc.perform(post("/api/v1/processing/jobs")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("UNAUTHORIZED"))
+                .andExpect(jsonPath("$.message")
+                        .value("Authentication required: missing user identity or internal service credentials"));
+    }
+
+    @Test
+    @DisplayName("Security: Direct untrusted client X-User-Id without Gateway assertion is rejected (401)")
+    void testDirectUntrustedUserIdRejected() throws Exception {
+        UUID docId = UUID.randomUUID();
+        ProcessingJobCreateRequest request = ProcessingJobCreateRequest.builder()
+                .documentId(docId)
+                .build();
+
+        mockMvc.perform(post("/api/v1/processing/jobs")
+                .header("X-User-Id", DEFAULT_USER_ID)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("UNAUTHORIZED"))
+                .andExpect(jsonPath("$.message")
+                        .value("Direct client identity headers rejected: gateway assertion required"));
+    }
+
+    @Test
+    @DisplayName("Security: Tampered or invalid Gateway assertion returns 401 Unauthorized")
+    void testTamperedGatewayAssertionReturns401() throws Exception {
+        UUID docId = UUID.randomUUID();
+        ProcessingJobCreateRequest request = ProcessingJobCreateRequest.builder()
+                .documentId(docId)
+                .build();
+
+        mockMvc.perform(post("/api/v1/processing/jobs")
+                .header("X-Gateway-Assertion", "invalid.assertion.token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("UNAUTHORIZED"))
+                .andExpect(jsonPath("$.message").value("Invalid or expired gateway assertion"));
+    }
+
+    @Test
+    @DisplayName("Security: Protected endpoint with invalid internal secret returns 401 Unauthorized")
+    void testInvalidInternalSecretReturns401() throws Exception {
+        UUID docId = UUID.randomUUID();
+        ProcessingJobCreateRequest request = ProcessingJobCreateRequest.builder()
+                .documentId(docId)
+                .build();
+
+        mockMvc.perform(post("/api/v1/processing/jobs")
+                .header("X-Internal-Secret", "wrong-secret-value")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("UNAUTHORIZED"))
+                .andExpect(jsonPath("$.message").value("Invalid internal service credentials"));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/processing/jobs - Success 201 Created with verified Gateway assertion")
     void testCreateJobSuccess() throws Exception {
         UUID docId = UUID.randomUUID();
         UUID jobId = UUID.randomUUID();
@@ -68,8 +189,9 @@ class ProcessingJobControllerTest {
         when(processingJobService.createJob(any(ProcessingJobCreateRequest.class))).thenReturn(response);
 
         mockMvc.perform(post("/api/v1/processing/jobs")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                .header("X-Gateway-Assertion", validGatewayAssertion)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(jobId.toString()))
                 .andExpect(jsonPath("$.document_id").value(docId.toString()))
@@ -82,8 +204,9 @@ class ProcessingJobControllerTest {
         ProcessingJobCreateRequest request = new ProcessingJobCreateRequest(); // missing document_id
 
         mockMvc.perform(post("/api/v1/processing/jobs")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                .header("X-Gateway-Assertion", validGatewayAssertion)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.details").isArray());
@@ -103,8 +226,9 @@ class ProcessingJobControllerTest {
                 .thenThrow(new DuplicateJobException("Document is already being processed", existingJobId));
 
         mockMvc.perform(post("/api/v1/processing/jobs")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                .header("X-Gateway-Assertion", validGatewayAssertion)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error").value("DUPLICATE_JOB"));
     }
@@ -126,7 +250,8 @@ class ProcessingJobControllerTest {
 
         when(processingJobService.getJobById(jobId)).thenReturn(response);
 
-        mockMvc.perform(get("/api/v1/processing/jobs/{id}", jobId))
+        mockMvc.perform(get("/api/v1/processing/jobs/{id}", jobId)
+                .header("X-Gateway-Assertion", createAssertion(DEFAULT_USER_ID, "ROLE_USER", null, TEST_SECRET, "GET", "/api/v1/processing/jobs/" + jobId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(jobId.toString()))
                 .andExpect(jsonPath("$.status").value("EXTRACTING"))
@@ -139,7 +264,8 @@ class ProcessingJobControllerTest {
         UUID jobId = UUID.randomUUID();
         when(processingJobService.getJobById(jobId)).thenThrow(new JobNotFoundException(jobId));
 
-        mockMvc.perform(get("/api/v1/processing/jobs/{id}", jobId))
+        mockMvc.perform(get("/api/v1/processing/jobs/{id}", jobId)
+                .header("X-Gateway-Assertion", createAssertion(DEFAULT_USER_ID, "ROLE_USER", null, TEST_SECRET, "GET", "/api/v1/processing/jobs/" + jobId)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").value("JOB_NOT_FOUND"));
     }
@@ -160,7 +286,8 @@ class ProcessingJobControllerTest {
 
         when(processingJobService.getJobStatus(jobId)).thenReturn(statusResponse);
 
-        mockMvc.perform(get("/api/v1/processing/jobs/{id}/status", jobId))
+        mockMvc.perform(get("/api/v1/processing/jobs/{id}/status", jobId)
+                .header("X-Gateway-Assertion", createAssertion(DEFAULT_USER_ID, "ROLE_USER", null, TEST_SECRET, "GET", "/api/v1/processing/jobs/" + jobId + "/status")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CHUNKING"))
                 .andExpect(jsonPath("$.current_step").value("Splitting text"));
@@ -181,7 +308,8 @@ class ProcessingJobControllerTest {
 
         when(processingJobService.getDocumentStatus(docId)).thenReturn(response);
 
-        mockMvc.perform(get("/api/v1/processing/documents/{documentId}/status", docId))
+        mockMvc.perform(get("/api/v1/processing/documents/{documentId}/status", docId)
+                .header("X-Gateway-Assertion", createAssertion(DEFAULT_USER_ID, "ROLE_USER", null, TEST_SECRET, "GET", "/api/v1/processing/documents/" + docId + "/status")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.document_id").value(docId.toString()))
                 .andExpect(jsonPath("$.status").value("COMPLETED"));
@@ -199,7 +327,8 @@ class ProcessingJobControllerTest {
 
         when(processingJobService.retryJob(jobId)).thenReturn(response);
 
-        mockMvc.perform(post("/api/v1/processing/jobs/{id}/retry", jobId))
+        mockMvc.perform(post("/api/v1/processing/jobs/{id}/retry", jobId)
+                .header("X-Gateway-Assertion", createAssertion(DEFAULT_USER_ID, "ROLE_USER", null, TEST_SECRET, "POST", "/api/v1/processing/jobs/" + jobId + "/retry")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("QUEUED"));
     }
@@ -216,7 +345,8 @@ class ProcessingJobControllerTest {
 
         when(processingJobService.cancelJob(jobId)).thenReturn(response);
 
-        mockMvc.perform(post("/api/v1/processing/jobs/{id}/cancel", jobId))
+        mockMvc.perform(post("/api/v1/processing/jobs/{id}/cancel", jobId)
+                .header("X-Gateway-Assertion", createAssertion(DEFAULT_USER_ID, "ROLE_USER", null, TEST_SECRET, "POST", "/api/v1/processing/jobs/" + jobId + "/cancel")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CANCELLED"));
     }

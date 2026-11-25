@@ -9,5 +9,9 @@ public interface KnowledgeServiceClient {
 
     Optional<DocumentDto> getDocument(UUID documentId);
 
+    boolean verifyDocumentWriteAccess(UUID documentId, UUID userId);
+
     void updateDocumentProcessingStatus(UUID documentId, String status);
+
+    <T> T streamDocumentContent(UUID documentId, DocumentContentCallback<T> callback);
 }

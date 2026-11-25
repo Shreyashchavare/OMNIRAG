@@ -1,5 +1,7 @@
 package com.omragul.processing.service;
 
+import com.omragul.processing.client.KnowledgeServiceClient;
+import com.omragul.processing.client.dto.DocumentDto;
 import com.omragul.processing.dto.request.ProcessingJobCreateRequest;
 import com.omragul.processing.dto.response.DocumentProcessingStatusResponse;
 import com.omragul.processing.dto.response.JobStatusResponse;
@@ -12,7 +14,10 @@ import com.omragul.processing.exception.IllegalStateTransitionException;
 import com.omragul.processing.exception.JobNotFoundException;
 import com.omragul.processing.exception.MaxRetriesExceededException;
 import com.omragul.processing.repository.ProcessingJobRepository;
+import com.omragul.processing.security.UserSecurityContext;
+import com.omragul.processing.security.UserSecurityContextHolder;
 import com.omragul.processing.service.impl.ProcessingJobServiceImpl;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,6 +31,7 @@ import org.springframework.data.domain.PageRequest;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -41,11 +47,23 @@ class ProcessingJobServiceTest {
     @Mock
     private ProcessingOrchestrator orchestrator;
 
+    @Mock
+    private KnowledgeServiceClient knowledgeServiceClient;
+
     private ProcessingJobService service;
+    private UUID testUserId;
 
     @BeforeEach
     void setUp() {
-        service = new ProcessingJobServiceImpl(repository, orchestrator, 3);
+        testUserId = UUID.randomUUID();
+        UserSecurityContextHolder.setContext(UserSecurityContext.user(testUserId, Set.of("USER")));
+        lenient().when(knowledgeServiceClient.verifyDocumentWriteAccess(any(), any())).thenReturn(true);
+        service = new ProcessingJobServiceImpl(repository, orchestrator, knowledgeServiceClient, 3);
+    }
+
+    @AfterEach
+    void tearDown() {
+        UserSecurityContextHolder.clear();
     }
 
     @Test
@@ -53,14 +71,22 @@ class ProcessingJobServiceTest {
     void testCreateJobSuccess() {
         UUID docId = UUID.randomUUID();
         UUID jobId = UUID.randomUUID();
+        UUID kbId = UUID.randomUUID();
         ProcessingJobCreateRequest request = ProcessingJobCreateRequest.builder()
                 .documentId(docId)
+                .knowledgeBaseId(kbId)
                 .build();
+
+        when(knowledgeServiceClient.getDocument(docId)).thenReturn(Optional.of(DocumentDto.builder()
+                .id(docId)
+                .knowledgeBaseId(kbId)
+                .ownerId(testUserId)
+                .build()));
 
         when(repository.findFirstByDocumentIdAndStatusInOrderByCreatedAtDesc(eq(docId), any()))
                 .thenReturn(Optional.empty());
 
-        when(repository.save(any(ProcessingJob.class))).thenAnswer(invocation -> {
+        when(repository.saveAndFlush(any(ProcessingJob.class))).thenAnswer(invocation -> {
             ProcessingJob job = invocation.getArgument(0);
             job.setId(jobId);
             job.setCreatedAt(Instant.now());
@@ -73,6 +99,8 @@ class ProcessingJobServiceTest {
         assertNotNull(response);
         assertEquals(jobId, response.getId());
         assertEquals(docId, response.getDocumentId());
+        assertEquals(kbId, response.getKnowledgeBaseId());
+        assertEquals(testUserId, response.getOwnerId());
         assertEquals(ProcessingStatus.QUEUED, response.getStatus());
 
         verify(orchestrator, times(1)).submitJob(jobId);
@@ -82,31 +110,70 @@ class ProcessingJobServiceTest {
     @DisplayName("Should return existing job for identical idempotency key")
     void testCreateJobIdempotency() {
         UUID docId = UUID.randomUUID();
-        UUID existingJobId = UUID.randomUUID();
+        UUID jobId = UUID.randomUUID();
+        UUID kbId = UUID.randomUUID();
         String idemKey = "idem-key-123";
 
+        when(knowledgeServiceClient.getDocument(docId)).thenReturn(Optional.of(DocumentDto.builder()
+                .id(docId)
+                .knowledgeBaseId(kbId)
+                .ownerId(testUserId)
+                .build()));
+
         ProcessingJob existing = ProcessingJob.builder()
-                .id(existingJobId)
+                .id(jobId)
                 .documentId(docId)
+                .knowledgeBaseId(kbId)
+                .ownerId(testUserId)
                 .status(ProcessingStatus.VALIDATING)
                 .idempotencyKey(idemKey)
                 .createdAt(Instant.now())
                 .updatedAt(Instant.now())
                 .build();
 
-        when(repository.findByIdempotencyKey(idemKey)).thenReturn(Optional.of(existing));
+        when(repository.findByDocumentIdAndIdempotencyKey(docId, idemKey)).thenReturn(Optional.of(existing));
 
         ProcessingJobCreateRequest request = ProcessingJobCreateRequest.builder()
                 .documentId(docId)
+                .knowledgeBaseId(kbId)
                 .idempotencyKey(idemKey)
                 .build();
 
         ProcessingJobResponse response = service.createJob(request);
 
-        assertEquals(existingJobId, response.getId());
+        assertEquals(jobId, response.getId());
         assertEquals(ProcessingStatus.VALIDATING, response.getStatus());
         verify(repository, never()).save(any());
+        verify(repository, never()).saveAndFlush(any());
         verify(orchestrator, never()).submitJob(any());
+    }
+
+    @Test
+    @DisplayName("Should translate concurrent DataIntegrityViolationException on saveAndFlush into DuplicateJobException")
+    void testCreateJobConcurrentDataIntegrityViolation() {
+        UUID docId = UUID.randomUUID();
+        UUID kbId = UUID.randomUUID();
+        ProcessingJobCreateRequest request = ProcessingJobCreateRequest.builder()
+                .documentId(docId)
+                .knowledgeBaseId(kbId)
+                .idempotencyKey("concurrent-key")
+                .build();
+
+        when(knowledgeServiceClient.getDocument(docId)).thenReturn(Optional.of(DocumentDto.builder()
+                .id(docId)
+                .knowledgeBaseId(kbId)
+                .ownerId(testUserId)
+                .build()));
+
+        when(repository.findByDocumentIdAndIdempotencyKey(eq(docId), eq("concurrent-key")))
+                .thenReturn(Optional.empty());
+        when(repository.findFirstByDocumentIdAndStatusInOrderByCreatedAtDesc(eq(docId), any()))
+                .thenReturn(Optional.empty());
+        when(repository.saveAndFlush(any(ProcessingJob.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("Duplicate key violation"));
+
+        DuplicateJobException ex = assertThrows(DuplicateJobException.class, () -> service.createJob(request));
+        assertTrue(ex.getMessage().contains("already exists or is being created"));
     }
 
     @Test
@@ -114,10 +181,19 @@ class ProcessingJobServiceTest {
     void testCreateJobDuplicateRejection() {
         UUID docId = UUID.randomUUID();
         UUID activeJobId = UUID.randomUUID();
+        UUID kbId = UUID.randomUUID();
+
+        when(knowledgeServiceClient.getDocument(docId)).thenReturn(Optional.of(DocumentDto.builder()
+                .id(docId)
+                .knowledgeBaseId(kbId)
+                .ownerId(testUserId)
+                .build()));
 
         ProcessingJob activeJob = ProcessingJob.builder()
                 .id(activeJobId)
                 .documentId(docId)
+                .knowledgeBaseId(kbId)
+                .ownerId(testUserId)
                 .status(ProcessingStatus.EXTRACTING)
                 .build();
 
@@ -126,6 +202,7 @@ class ProcessingJobServiceTest {
 
         ProcessingJobCreateRequest request = ProcessingJobCreateRequest.builder()
                 .documentId(docId)
+                .knowledgeBaseId(kbId)
                 .build();
 
         DuplicateJobException ex = assertThrows(DuplicateJobException.class, () -> service.createJob(request));
@@ -142,6 +219,7 @@ class ProcessingJobServiceTest {
         ProcessingJob job = ProcessingJob.builder()
                 .id(jobId)
                 .documentId(docId)
+                .ownerId(testUserId)
                 .status(ProcessingStatus.CHUNKING)
                 .stage(ProcessingStage.CHUNKING)
                 .currentStep("Splitting into chunks")
@@ -175,6 +253,7 @@ class ProcessingJobServiceTest {
         ProcessingJob job = ProcessingJob.builder()
                 .id(jobId)
                 .documentId(UUID.randomUUID())
+                .ownerId(testUserId)
                 .status(ProcessingStatus.FAILED)
                 .stage(ProcessingStage.FAILED)
                 .attemptCount(1)
@@ -201,6 +280,7 @@ class ProcessingJobServiceTest {
         ProcessingJob job = ProcessingJob.builder()
                 .id(jobId)
                 .documentId(UUID.randomUUID())
+                .ownerId(testUserId)
                 .status(ProcessingStatus.FAILED)
                 .attemptCount(3)
                 .maxAttempts(3)
@@ -219,6 +299,7 @@ class ProcessingJobServiceTest {
         ProcessingJob job = ProcessingJob.builder()
                 .id(jobId)
                 .documentId(UUID.randomUUID())
+                .ownerId(testUserId)
                 .status(ProcessingStatus.VALIDATING)
                 .createdAt(Instant.now())
                 .updatedAt(Instant.now())
@@ -239,11 +320,124 @@ class ProcessingJobServiceTest {
         ProcessingJob job = ProcessingJob.builder()
                 .id(jobId)
                 .documentId(UUID.randomUUID())
+                .ownerId(testUserId)
                 .status(ProcessingStatus.COMPLETED)
                 .build();
 
         when(repository.findById(jobId)).thenReturn(Optional.of(job));
 
         assertThrows(IllegalStateTransitionException.class, () -> service.cancelJob(jobId));
+    }
+
+    @Test
+    @DisplayName("PROC-08: retryJob dispatches task submission strictly after transaction commit")
+    void testRetryJobSubmittedOnlyAfterTransactionCommit() {
+        UUID jobId = UUID.randomUUID();
+        ProcessingJob job = ProcessingJob.builder()
+                .id(jobId)
+                .documentId(UUID.randomUUID())
+                .ownerId(testUserId)
+                .status(ProcessingStatus.FAILED)
+                .stage(ProcessingStage.FAILED)
+                .attemptCount(1)
+                .maxAttempts(3)
+                .build();
+
+        when(repository.findById(jobId)).thenReturn(Optional.of(job));
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            ProcessingJobResponse response = service.retryJob(jobId);
+            assertNotNull(response);
+            assertEquals(ProcessingStatus.QUEUED, response.getStatus());
+
+            // Task must NOT be submitted before commit
+            verify(orchestrator, never()).submitJob(jobId);
+
+            // Trigger afterCommit
+            for (org.springframework.transaction.support.TransactionSynchronization sync :
+                    org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()) {
+                sync.afterCommit();
+            }
+
+            // Task must be submitted after commit
+            verify(orchestrator, times(1)).submitJob(jobId);
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
+    @DisplayName("PROC-08: retryJob does NOT dispatch task submission when transaction rolls back")
+    void testRetryJobNotSubmittedWhenTransactionRollsBack() {
+        UUID jobId = UUID.randomUUID();
+        ProcessingJob job = ProcessingJob.builder()
+                .id(jobId)
+                .documentId(UUID.randomUUID())
+                .ownerId(testUserId)
+                .status(ProcessingStatus.FAILED)
+                .stage(ProcessingStage.FAILED)
+                .attemptCount(1)
+                .maxAttempts(3)
+                .build();
+
+        when(repository.findById(jobId)).thenReturn(Optional.of(job));
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            ProcessingJobResponse response = service.retryJob(jobId);
+            assertNotNull(response);
+
+            // Simulate rollback
+            for (org.springframework.transaction.support.TransactionSynchronization sync :
+                    org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()) {
+                sync.afterCompletion(org.springframework.transaction.support.TransactionSynchronization.STATUS_ROLLED_BACK);
+            }
+
+            // Task must NEVER be submitted if transaction rolled back
+            verify(orchestrator, never()).submitJob(jobId);
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
+    @DisplayName("PROC-08: retryJob handles executor rejection in afterCommit safely without unhandled exception")
+    void testRetryJobExecutorRejectionHandledSafely() {
+        UUID jobId = UUID.randomUUID();
+        ProcessingJob job = ProcessingJob.builder()
+                .id(jobId)
+                .documentId(UUID.randomUUID())
+                .ownerId(testUserId)
+                .status(ProcessingStatus.FAILED)
+                .stage(ProcessingStage.FAILED)
+                .attemptCount(1)
+                .maxAttempts(3)
+                .build();
+
+        when(repository.findById(jobId)).thenReturn(Optional.of(job));
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        doThrow(new java.util.concurrent.RejectedExecutionException("Worker queue full"))
+                .when(orchestrator).submitJob(jobId);
+
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            ProcessingJobResponse response = service.retryJob(jobId);
+            assertNotNull(response);
+            assertEquals(ProcessingStatus.QUEUED, response.getStatus());
+
+            // afterCommit catches rejection safely
+            assertDoesNotThrow(() -> {
+                for (org.springframework.transaction.support.TransactionSynchronization sync :
+                        org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()) {
+                    sync.afterCommit();
+                }
+            });
+            verify(orchestrator, times(1)).submitJob(jobId);
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 }
