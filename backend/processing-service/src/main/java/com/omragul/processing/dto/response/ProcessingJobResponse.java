@@ -24,12 +24,15 @@ public class ProcessingJobResponse {
     @Schema(description = "Job unique identifier")
     private UUID id;
 
+    @com.fasterxml.jackson.annotation.JsonProperty("document_id")
     @Schema(description = "Document UUID")
     private UUID documentId;
 
+    @com.fasterxml.jackson.annotation.JsonProperty("knowledge_base_id")
     @Schema(description = "Knowledge Base UUID")
     private UUID knowledgeBaseId;
 
+    @com.fasterxml.jackson.annotation.JsonProperty("owner_id")
     @Schema(description = "Owner User UUID")
     private UUID ownerId;
 
@@ -68,6 +71,21 @@ public class ProcessingJobResponse {
 
     @Schema(description = "Timestamp when execution completed or failed")
     private Instant completedAt;
+
+    @com.fasterxml.jackson.annotation.JsonProperty("documentId")
+    public UUID getDocumentIdCamel() {
+        return documentId;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonProperty("ownerId")
+    public UUID getOwnerIdCamel() {
+        return ownerId;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonProperty("knowledgeBaseId")
+    public UUID getKnowledgeBaseIdCamel() {
+        return knowledgeBaseId;
+    }
 
     public static ProcessingJobResponse fromEntity(ProcessingJob job) {
         if (job == null) {
