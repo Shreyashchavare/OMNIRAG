@@ -79,7 +79,7 @@ services:
     build:
       context: ./ai-services/embedding-service
       dockerfile: Dockerfile
-    image: omragul-integration-embedding-service:stage3.7
+    image: omragul-integration-embedding-service:v5
     container_name: omragul-integration-embedding-service
     restart: "no"
     ports:
@@ -88,6 +88,8 @@ services:
       INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-omragul-integration-test-secret-4096-phase2}
       OLLAMA_BASE_URL: "http://dummy-ollama-not-used:11434"
       EMBEDDING_MODEL: "bge-m3"
+      # Integration environment explicitly permits deterministic fallback because Ollama is not provisioned
+      OLLAMA_FALLBACK_EMBEDDINGS: "true"
     networks:
       - omragul-integration-network
 
@@ -151,19 +153,22 @@ services:
     networks:
       - omragul-integration-network
 
-  multimodal-mock-integration:
+  multimodal-service-integration:
     build:
-      context: ./infrastructure/mocks/multimodal
+      context: ./ai-services/multimodal-service
       dockerfile: Dockerfile
-    image: omragul-integration-multimodal-mock:stage3.7
-    container_name: omragul-integration-multimodal-mock
+    image: omragul-integration-multimodal-service:v5
+    container_name: omragul-integration-multimodal-service
     restart: "no"
     ports:
       - "127.0.0.1:18004:8000"
     environment:
       INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-omragul-integration-test-secret-4096-phase2}
     networks:
-      - omragul-integration-network
+      omragul-integration-network:
+        aliases:
+          - multimodal-mock-integration
+          - multimodal-service-integration
 
   processing-service-integration:
     build:
@@ -181,7 +186,7 @@ services:
         condition: service_healthy
       knowledge-service-integration:
         condition: service_started
-      multimodal-mock-integration:
+      multimodal-service-integration:
         condition: service_started
       rag-service-integration:
         condition: service_started
@@ -206,7 +211,7 @@ services:
       GATEWAY_ASSERTION_EXPECTED_AUDIENCE: "processing-service"
       INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-omragul-integration-test-secret-4096-phase2}
       KNOWLEDGE_SERVICE_URL: "http://knowledge-service-integration:8080"
-      MULTIMODAL_SERVICE_URL: "http://multimodal-mock-integration:8000"
+      MULTIMODAL_SERVICE_URL: "http://multimodal-service-integration:8000"
       RAG_SERVICE_URL: "http://rag-service-integration:8000"
       PROCESSING_MAX_ATTEMPTS: "3"
       PROCESSING_CONNECT_TIMEOUT_MS: "1000"

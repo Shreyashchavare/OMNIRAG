@@ -42,6 +42,7 @@ class Settings(BaseSettings):
 
     OLLAMA_TIMEOUT: float = 55.0
     OLLAMA_HEALTH_TIMEOUT: float = 5.0
+    OLLAMA_FALLBACK_EMBEDDINGS: bool = False
 
     @property
     def internal_service_secret(self) -> str:
