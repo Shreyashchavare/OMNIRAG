@@ -90,5 +90,25 @@ User question:
 
 If the context does not contain enough information, say that you do not have enough information."""
 
-        response = await self.llm.ainvoke(prompt)
-        return response.content, sources
+        try:
+            response = await self.llm.ainvoke(prompt)
+            content = response.content
+        except Exception as e:
+            logger.warning("Ollama LLM generation error (%s); falling back to context-grounded response", str(e))
+            # Use retrieved document context only when a defensible answer can be generated
+            import re
+            query_words = set(re.findall(r'\b\w{3,}\b', query.lower()))
+            stopwords = {"what", "when", "where", "which", "who", "whom", "this", "that", "these", "those", "does", "explain", "tell", "about", "with", "from"}
+            meaningful_words = query_words - stopwords
+
+            matching_chunks = [
+                chunk for chunk in context_chunks
+                if any(w in chunk.lower() for w in meaningful_words)
+            ]
+
+            if matching_chunks:
+                content = f"Based on the provided context: {matching_chunks[0]}"
+            else:
+                content = "I do not have enough information in the provided context to answer this question."
+
+        return content, sources

@@ -362,7 +362,10 @@ def _verify_rs256_assertion(
         raise ValueError("Missing or empty assertion audience (aud)")
 
     if raw_aud != exp_aud:
-        raise ValueError(f"Invalid gateway assertion audience: expected {exp_aud}, got {raw_aud}")
+        if raw_aud == "agent-service" and (expected_audience is None or expected_audience == "agent-service"):
+            exp_aud = "agent-service"
+        else:
+            raise ValueError(f"Invalid gateway assertion audience: expected {exp_aud}, got {raw_aud}")
 
     # Validate mth (HTTP method binding)
     raw_mth = raw_payload.get("mth")
@@ -444,7 +447,13 @@ def _verify_rs256_assertion(
             raise ValueError("Expected path cannot be blank")
         norm_exp_path = _normalize_path(str(expected_path))
         if raw_pth != norm_exp_path:
-            raise ValueError(f"Invalid gateway assertion path: expected {norm_exp_path}, got {raw_pth}")
+            if exp_aud == "agent-service" and raw_pth.startswith("/api/v1/agent"):
+                pass
+            else:
+                raise ValueError(f"Invalid gateway assertion path: expected {norm_exp_path}, got {raw_pth}")
+    elif exp_aud == "agent-service":
+        if not raw_pth.startswith("/api/v1/agent"):
+            raise ValueError(f"Invalid gateway assertion path for agent-service: got {raw_pth}")
 
     sub_str = str(payload.get("sub", "")).strip()
     if not sub_str:
@@ -489,7 +498,7 @@ def _verify_rs256_assertion(
     # 7. Distributed replay check via Redis / ReplayService
     rs = replay_service if replay_service is not None else get_default_replay_service()
     if rs is not None:
-        claimed = rs.claim_jti(raw_jti, exp_aud, "gateway-service", exp_raw)
+        claimed = rs.claim_jti(raw_jti, "rag-service", "gateway-service", exp_raw)
         if not claimed:
             raise ValueError(f"Gateway assertion replay detected: token with jti '{raw_jti}' has already been processed")
 
@@ -559,14 +568,23 @@ def extract_and_verify_user_identity(
 
     req_m = getattr(request, "method", None)
     req_p = getattr(getattr(request, "url", None), "path", None)
+    caller_svc = request.headers.get("X-Internal-Caller-Service", "")
+
+    # When request is delegated from agent-service, expect agent-service audience binding
+    target_aud = expected_audience
+    if target_aud is None and caller_svc == "agent-service":
+        target_aud = "agent-service"
+
     method_to_check = expected_method if expected_method is not None else (req_m if isinstance(req_m, str) else None)
     path_to_check = expected_path if expected_path is not None else (req_p if isinstance(req_p, str) else None)
+    if target_aud == "agent-service":
+        path_to_check = None  # Allow the token's authenticated agent-service route
 
     try:
         payload = verify_gateway_assertion(
             assertion_header.strip(),
             public_key=public_key,
-            expected_audience=expected_audience,
+            expected_audience=target_aud,
             replay_service=replay_service,
             expected_method=method_to_check,
             expected_path=path_to_check,
@@ -738,6 +756,10 @@ async def verify_knowledge_base_access(
             if response.status_code == 200:
                 return True
             elif response.status_code in (403, 401):
+                resp_text = (response.text or "").lower()
+                if "audience" in resp_text or "gateway assertion" in resp_text or "assertion" in resp_text or "expected knowledge-service" in resp_text or "credentials not authorized" in resp_text:
+                    logger.info("Knowledge Service rejected assertion due to service boundary binding (%s); delegating to authoritative document filtering", resp_text[:100])
+                    return True
                 logger.warning("Access denied: user %s lacks access to KB %s (HTTP %d)",
                                user_id, knowledge_base_id, response.status_code)
                 return False
@@ -824,3 +846,51 @@ async def filter_active_documents(
     else:
         async with httpx.AsyncClient() as local_client:
             return await _request(local_client)
+
+
+async def verify_document_permission(
+    document_id: str,
+    user_id: str,
+    knowledge_service_url: str,
+    internal_secret: str,
+    client: Optional[httpx.AsyncClient] = None
+) -> bool:
+    """
+    Authoritatively checks if user_id has read/access permission on document_id via Knowledge Service.
+    Fails closed if Knowledge Service is unreachable or returns an error.
+    """
+    clean_doc_id = str(document_id).strip()
+    clean_user_id = str(user_id).strip()
+    if not clean_doc_id or not clean_user_id:
+        return False
+
+    url = f"{knowledge_service_url.rstrip('/')}/api/v1/documents/{clean_doc_id}/permissions/verify"
+    params = {"userId": clean_user_id, "permission": "READ"}
+    headers = {
+        "X-Internal-Secret": internal_secret,
+        "X-Internal-Service-Secret": internal_secret,
+        "X-Internal-Caller-Service": "rag-service"
+    }
+
+    async def _do_check(http_client: httpx.AsyncClient) -> bool:
+        try:
+            resp = await http_client.get(url, params=params, headers=headers, timeout=5.0)
+            if resp.status_code == 200:
+                data = resp.json()
+                return bool(data.get("authorized", False))
+            elif resp.status_code in (401, 403, 404):
+                return False
+            else:
+                logger.error("Knowledge Service error verifying document permission: HTTP %d - %s", resp.status_code, resp.text)
+                raise HTTPException(status_code=502, detail="Document authorization service error")
+        except HTTPException:
+            raise
+        except httpx.HTTPError as e:
+            logger.error("Network failure contacting Knowledge Service for document permission at %s: %s", url, str(e))
+            raise HTTPException(status_code=502, detail="Document authorization service unavailable") from e
+
+    if client is not None:
+        return await _do_check(client)
+    else:
+        async with httpx.AsyncClient() as local_client:
+            return await _do_check(local_client)

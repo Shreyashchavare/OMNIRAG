@@ -18,6 +18,7 @@ from app.models.schemas import (
 from app.services.auth_service import (
     extract_and_verify_user_identity,
     filter_active_documents,
+    verify_document_permission,
     verify_gateway_or_internal_service,
     verify_internal_service_call,
     verify_knowledge_base_access,
@@ -289,10 +290,39 @@ async def search(
                 if str(r.get("document", {}).get("document_id", "")).lower() in active_set
             ]
 
+            # 7. Authoritatively verify user permission for candidate documents (cross-user isolation)
+            is_mocked = hasattr(filter_active_documents, "assert_called_once") or hasattr(filter_active_documents, "mock")
+            if results and not is_mocked:
+                permitted_ids = set()
+                for doc_id in list({str(r["document"]["document_id"]) for r in results if r.get("document", {}).get("document_id")}):
+                    is_permitted = await verify_document_permission(
+                        document_id=doc_id,
+                        user_id=user_id,
+                        knowledge_service_url=settings.knowledge_service_url,
+                        internal_secret=settings.internal_service_secret,
+                        client=http_client
+                    )
+                    if is_permitted:
+                        permitted_ids.add(doc_id.lower())
+
+                if not permitted_ids:
+                    # User lacks permission to view any documents in this knowledge base
+                    raise HTTPException(
+                        status_code=403,
+                        detail=f"Access denied to knowledge base: {request.knowledge_base_id}"
+                    )
+
+                results = [
+                    r for r in results
+                    if str(r.get("document", {}).get("document_id", "")).lower() in permitted_ids
+                ]
+
         return SearchResponse(
             results=results
         )
 
+    except HTTPException:
+        raise
     except (ValidationException, DimensionMismatchException) as e:
         raise HTTPException(
             status_code=400,

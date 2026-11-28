@@ -97,7 +97,7 @@ services:
     build:
       context: ./ai-services/rag-service
       dockerfile: Dockerfile
-    image: omragul-integration-rag-service:stage3.7
+    image: omragul-integration-rag-service:v6
     container_name: omragul-integration-rag-service
     restart: "no"
     ports:
@@ -122,6 +122,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-omragul_redis_test_secret_123}
     volumes:
       - ./certs:/certs:ro
+      - ./ai-services/rag-service/faiss:/app/faiss
     networks:
       - omragul-integration-network
 
@@ -129,7 +130,7 @@ services:
     build:
       context: ./ai-services/agent-service
       dockerfile: Dockerfile
-    image: omragul-integration-agent-service:stage3.7
+    image: omragul-integration-agent-service:v6
     container_name: omragul-integration-agent-service
     restart: "no"
     ports:
